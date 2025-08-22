@@ -5,8 +5,20 @@ __pycache__/
 
 # C extensions
 *.so
+# Ignora qual arquivo que contém da Dados
+*dados*
+
+#Ignora pasta do projeto
+app/automation/pages/main_menu - Copia.py
+app/automation/tasks/base_task - Copia Quebrada.py
+app/data/file_manager - Copia.py
+error_screenshots/*
+resources/config/*
+resources/data_input/*
+video/*
 
 # Distribution / packaging
+
 .Python
 build/
 develop-eggs/
@@ -35,6 +47,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+log_de_data_usadas.txt
 
 # Unit test / coverage reports
 htmlcov/

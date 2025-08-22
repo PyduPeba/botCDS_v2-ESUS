@@ -1,0 +1,11 @@
+# Arquivo: requirements.txt
+# Bibliotecas necessárias para o projeto
+# Após instalar o Python, você pode criar um ambiente virtual e instalar as dependências com:
+# python -m venv venv
+# playwright install (para instalar os navegadores)
+# Depois, ative o ambiente virtual e instale as dependências:
+
+playwright==1.41.2 # Ou a versão mais recente compatível com o seu ambiente
+pandas==2.1.4     # Ou a versão que você prefere/usa
+PyQt5==5.15.10    # Ou a versão que você prefere/usa
+# asyncio já vem com o Python >= 3.4, não precisa listar explicitamente, mas é a tecnologia base.
