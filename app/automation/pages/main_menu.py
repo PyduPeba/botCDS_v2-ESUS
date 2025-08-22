@@ -35,6 +35,23 @@ class MainMenu(BasePage):
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         super().__init__(page, error_handler)
 
+    async def _click_center_of_page(self, step_description: str = "Clicar no centro da tela"):
+        """Mover mouse e clicar no centro da página para tentar fechar popups/menus."""
+        page_width = self._page.viewport_size['width'] if self._page.viewport_size else 1280
+        page_height = self._page.viewport_size['height'] if self._page.viewport_size else 720
+        center_x = page_width // 2
+        center_y = page_height // 2
+
+        logger.debug(f"Clicando no centro da tela ({center_x}, {center_y}) para {step_description}...")
+        try:
+             await self._page.mouse.move(center_x, center_y)
+             await self._page.mouse.click(center_x, center_y)
+             logger.debug(f"Clique no centro da tela realizado para {step_description}.")
+             await asyncio.sleep(0.5) # Pequena pausa após o clique
+        except Exception as e:
+             logger.warning(f"Falha ao clicar no centro da tela para {step_description}: {e}")
+             # Esta falha não é crítica, apenas loga e continua.
+
     async def _perform_menu_navigation_steps(self, target_item_selector: str, target_item_desc: str) -> bool:
          """
          Executa os passos de navegação no menu lateral (CDS -> Item alvo).
@@ -98,26 +115,27 @@ class MainMenu(BasePage):
 
         menu_navigation_successful = False
 
-        # --- Estratégia Principal: Hover e clique no menu lateral ---
+        # --- Estratégia Única: Acessar o menu lateral que deve estar sempre visível ---
         logger.debug("Tentando estratégia de hover para abrir menu lateral...")
         try:
             menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
             await menu_container_locator.wait_for(state="visible", timeout=5000) # Espera o menu lateral estar escondido
             logger.debug("Contêiner do menu lateral visível. Clicando nos itens...")
 
-            # Clica no item "CDS" no menu lateral
-            await self._safe_click(self._page.locator(self._CDS_MENU_ITEM_SELECTOR), "Item Menu Lateral CDS")
-            await asyncio.sleep(1) # Pausa para sub-menu aparecer
-
-            # Tenta clicar no item "Atendimento Individual"
-            await self._safe_click(self._page.locator(self._ATENDIMENTO_INDIVIDUAL_MENU_ITEM_SELECTOR), "Item Menu Lateral Atendimento Individual")
-            logger.debug("Navegação no menu lateral bem-sucedida.")
+            # Executa os passos internos de navegação do menu lateral (CDS -> Atendimento Individual)
+            # _perform_menu_navigation_steps já cuida do clique em CDS e no item alvo.
+            menu_navigation_successful = await self._perform_menu_navigation_steps(
+                self._ATENDIMENTO_INDIVIDUAL_MENU_ITEM_SELECTOR,
+                "Item Menu Lateral Atendimento Individual (após CDS)"
+            )
+            if menu_navigation_successful:
+                 logger.debug("Navegação do menu lateral bem-sucedida.")
 
         except Exception as e:
-            # Se falhar em qualquer passo aqui, aciona o handler manual.
-            logger.error(f"Falha na navegação completa para formulário de Atendimento Individual: {e}.")
-            await self._handler.handle_error(e, step_description="Navegação para formulário de Atendimento Individual.")
-            raise AutomationError("Navegação inicial para a tela da ficha falhou (menu lateral inacessível).")
+            # Se a navegação no menu lateral falhar, loga e levanta erro.
+            logger.error(f"Falha na navegação do menu lateral para Atendimento Individual: {e}.")
+            await self._handler.handle_error(e, step_description="Navegação para formulário de Atendimento Individual (Menu Lateral).")
+            raise AutomationError(f"Navegação inicial para a tela da ficha falhou (menu lateral inacessível): {e}") from e
 
         
         # --- FLUXO PÓS-NAVEGAÇÃO DE MENU LATERAL BEM-SUCEDIDA ---
@@ -129,7 +147,7 @@ class MainMenu(BasePage):
 
              # 2. Clicar em "Adicionar" e selecionar o tipo de ficha
              # (Este método _select_ficha_type_steps já contém tratamento de erro com o handler)
-             await self._select_ficha_type_steps(self._OPTION_ATENDIMENTO_INDIVIDUAL_SELECTOR, "Atendimento individual")
+            #  await self._select_ficha_type_steps(self._OPTION_ATENDIMENTO_INDIVIDUAL_SELECTOR, "Atendimento individual")
 
              # 3. Após selecionar o tipo de ficha com sucesso, espera pelo iframe e retorna seu FrameLocator.
              iframe_frame = await self._safe_switch_to_iframe(self._ESUS_IFRAME_SELECTOR, "Iframe Atendimento Individual (após selecionar tipo)")
@@ -151,30 +169,24 @@ class MainMenu(BasePage):
 
         menu_navigation_successful = False
 
-        # --- Estratégia Principal: Hover e clique no menu lateral ---
-        logger.debug("Tenta encontrar e clicar nos itens do menu LATERAL DIRETAMENTE (Procedimentos)...")
+        # --- Estratégia Única: Acessar o menu lateral que deve estar sempre visível ---
+        logger.debug("Tentando acessar o menu lateral que deve estar sempre visível (Procedimentos).")
         try:
             menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
             await menu_container_locator.wait_for(state="visible", timeout=10000)
-            logger.debug("Contêiner do menu lateral visível (Procedimentos). Clicando nos itens...")
-
-            # Clica no item "CDS" no menu lateral
-            await self._safe_click(self._page.locator(self._CDS_MENU_ITEM_SELECTOR), "Item Menu Lateral CDS (Procedimentos)")
-            await asyncio.sleep(1)
-
-            # Tenta clicar no item "Procedimentos"
-            await self._safe_click(self._page.locator(self._PROCEDIMENTOS_MENU_ITEM_SELECTOR), "Item Menu Lateral Procedimentos")
-            logger.debug("Navegação no menu lateral bem-sucedida (Procedimentos).")
+            logger.debug("Contêiner do menu lateral visível (Procedimentos). Prosseguindo...")
 
             menu_navigation_successful = await self._perform_menu_navigation_steps(
                 self._PROCEDIMENTOS_MENU_ITEM_SELECTOR,
                 "Item Menu Lateral Procedimentos (após CDS)"
             )
             if menu_navigation_successful:
-                 logger.debug("Navegação do menu lateral (estratégia hover) bem-sucedida (Procedimentos).")
+                 logger.debug("Navegação do menu lateral bem-sucedida (Procedimentos).")
 
         except Exception as e:
-             logger.warning(f"Estratégia de hover para abrir menu falhou (Procedimentos): {e}.")
+            logger.error(f"Falha na navegação do menu lateral para Procedimentos: {e}.")
+            await self._handler.handle_error(e, step_description="Navegação para formulário de Procedimentos (Menu Lateral).")
+            raise AutomationError(f"Navegação inicial para a tela da ficha (Procedimentos) falhou (menu lateral inacessível): {e}") from e
 
 
         # # --- Estratégia Alternativa: Clique direto no elemento que abre o menu ---
@@ -207,8 +219,8 @@ class MainMenu(BasePage):
              await self._click_center_of_page(step_description="Fechar menu lateral (Procedimentos)")
              await asyncio.sleep(0.5)
 
-             # 2. Clicar em "Adicionar" e selecionar o tipo de ficha
-             await self._select_ficha_type_steps(self._OPTION_FICHA_PROCEDIMENTOS_SELECTOR, "Ficha de Procedimentos")
+            #  # 2. Clicar em "Adicionar" e selecionar o tipo de ficha
+            #  await self._select_ficha_type_steps(self._OPTION_FICHA_PROCEDIMENTOS_SELECTOR, "Ficha de Procedimentos")
 
              # 3. Após selecionar o tipo de ficha com sucesso, espera pelo iframe e retorna seu FrameLocator.
              iframe_frame = await self._safe_switch_to_iframe(self._ESUS_IFRAME_SELECTOR, "Iframe Procedimentos (após selecionar tipo)")
@@ -221,84 +233,84 @@ class MainMenu(BasePage):
     
          
     # Adicionar um método auxiliar para clicar no centro da tela
-    async def _click_center_of_page(self, step_description: str = "Clicar no centro da tela"):
-        """Mover mouse e clicar no centro da página para tentar fechar popups/menus."""
-        page_width = self._page.viewport_size['width'] if self._page.viewport_size else 1280
-        page_height = self._page.viewport_size['height'] if self._page.viewport_size else 720
-        center_x = page_width // 2
-        center_y = page_height // 2
+    # async def _click_center_of_page(self, step_description: str = "Clicar no centro da tela"):
+    #     """Mover mouse e clicar no centro da página para tentar fechar popups/menus."""
+    #     page_width = self._page.viewport_size['width'] if self._page.viewport_size else 1280
+    #     page_height = self._page.viewport_size['height'] if self._page.viewport_size else 720
+    #     center_x = page_width // 2
+    #     center_y = page_height // 2
 
-        logger.debug(f"Clicando no centro da tela ({center_x}, {center_y}) para {step_description}...")
-        try:
-             # Usa force=True para tentar clicar mesmo se outro elemento estiver no caminho (cuidado!)
-             # Ou move o mouse primeiro, depois clica.
-             await self._page.mouse.move(center_x, center_y)
-             await self._page.mouse.click(center_x, center_y)
-             logger.debug(f"Clique no centro da tela realizado para {step_description}.")
-             await asyncio.sleep(0.5) # Pequena pausa após o clique
+    #     logger.debug(f"Clicando no centro da tela ({center_x}, {center_y}) para {step_description}...")
+    #     try:
+    #          # Usa force=True para tentar clicar mesmo se outro elemento estiver no caminho (cuidado!)
+    #          # Ou move o mouse primeiro, depois clica.
+    #          await self._page.mouse.move(center_x, center_y)
+    #          await self._page.mouse.click(center_x, center_y)
+    #          logger.debug(f"Clique no centro da tela realizado para {step_description}.")
+    #          await asyncio.sleep(0.5) # Pequena pausa após o clique
 
-        except Exception as e:
-             logger.warning(f"Falha ao clicar no centro da tela para {step_description}: {e}")
-             # Esta falha não é crítica, então apenas loga e continua.
+    #     except Exception as e:
+    #          logger.warning(f"Falha ao clicar no centro da tela para {step_description}: {e}")
+    #          # Esta falha não é crítica, então apenas loga e continua.
 
     
 
 
-        # --- Estratégia Alternativa: Clique direto no elemento que abre o menu ---
-        # Este bloco AGORA está no mesmo nível do try/except da estratégia principal.
-        if not menu_navigation_successful:
-            logger.debug("Tentando estratégia alternativa (clique direto no elemento que abre o menu)...")
-            try:
-                click_alternative_locator = self._page.locator(self._HOVER_ELEMENT_SELECTOR) # Assumindo que é o mesmo elemento
-                await click_alternative_locator.wait_for(state="visible", timeout=10000)
-                await self._safe_click(click_alternative_locator, "Elemento que abre menu (alternativa clique)")
-                menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
-                await menu_container_locator.wait_for(state="visible", timeout=5000)
-                await asyncio.sleep(0.5)
-                logger.debug("Menu lateral container visível (alternativa).")
+    #     # --- Estratégia Alternativa: Clique direto no elemento que abre o menu ---
+    #     # Este bloco AGORA está no mesmo nível do try/except da estratégia principal.
+    #     if not menu_navigation_successful:
+    #         logger.debug("Tentando estratégia alternativa (clique direto no elemento que abre o menu)...")
+    #         try:
+    #             click_alternative_locator = self._page.locator(self._HOVER_ELEMENT_SELECTOR) # Assumindo que é o mesmo elemento
+    #             await click_alternative_locator.wait_for(state="visible", timeout=10000)
+    #             await self._safe_click(click_alternative_locator, "Elemento que abre menu (alternativa clique)")
+    #             menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
+    #             await menu_container_locator.wait_for(state="visible", timeout=5000)
+    #             await asyncio.sleep(0.5)
+    #             logger.debug("Menu lateral container visível (alternativa).")
 
-                # Tenta executar os passos internos de navegação do menu lateral (CDS -> Atendimento Individual)
-                menu_navigation_successful = await self._perform_menu_navigation_steps(
-                    self._ATENDIMENTO_INDIVIDUAL_MENU_ITEM_SELECTOR,
-                    "Item Menu Lateral Atendimento Individual (após CDS alternativa)"
-                )
-                if menu_navigation_successful:
-                     logger.debug("Navegação do menu lateral (estratégia alternativa) bem-sucedida.")
+    #             # Tenta executar os passos internos de navegação do menu lateral (CDS -> Atendimento Individual)
+    #             menu_navigation_successful = await self._perform_menu_navigation_steps(
+    #                 self._ATENDIMENTO_INDIVIDUAL_MENU_ITEM_SELECTOR,
+    #                 "Item Menu Lateral Atendimento Individual (após CDS alternativa)"
+    #             )
+    #             if menu_navigation_successful:
+    #                  logger.debug("Navegação do menu lateral (estratégia alternativa) bem-sucedida.")
 
-            except Exception as e:
-                 # Se a alternativa também falhar, loga ERRO.
-                 logger.error(f"Estratégia alternativa para abrir menu também falhou: {e}.")
-                 # menu_navigation_successful já é False.
-                 # Nenhuma estratégia funcionou, não chamamos handler AQUI. A exceção
-                 # final será levantada após o if menu_navigation_successful abaixo.
+    #         except Exception as e:
+    #              # Se a alternativa também falhar, loga ERRO.
+    #              logger.error(f"Estratégia alternativa para abrir menu também falhou: {e}.")
+    #              # menu_navigation_successful já é False.
+    #              # Nenhuma estratégia funcionou, não chamamos handler AQUI. A exceção
+    #              # final será levantada após o if menu_navigation_successful abaixo.
 
 
-        # --- CLICAR NO CENTRO PARA FECHAR MENU (SE NECESSÁRIO) ---
-        # Este passo SÓ DEVE ACONTECER SE A NAVEGAÇÃO DO MENU LATERAL FOI BEM-SUCEDIDA
-        # Este bloco AGORA está no mesmo nível dos try/except das estratégias.
-        if menu_navigation_successful:
-             logger.debug("Navegação do menu lateral concluída. Tentando fechar menu lateral clicando no centro.")
-             await self._click_center_of_page(step_description="Fechar menu lateral")
-             await asyncio.sleep(0.5)
+    #     # --- CLICAR NO CENTRO PARA FECHAR MENU (SE NECESSÁRIO) ---
+    #     # Este passo SÓ DEVE ACONTECER SE A NAVEGAÇÃO DO MENU LATERAL FOI BEM-SUCEDIDA
+    #     # Este bloco AGORA está no mesmo nível dos try/except das estratégias.
+    #     if menu_navigation_successful:
+    #          logger.debug("Navegação do menu lateral concluída. Tentando fechar menu lateral clicando no centro.")
+    #          await self._click_center_of_page(step_description="Fechar menu lateral")
+    #          await asyncio.sleep(0.5)
 
-             # --- CLICAR "Adicionar" e SELECIONAR TIPO DE FICHA ---
-             # Este passo SÓ DEVE ACONTECER SE CLICAR NO CENTRO FOI BEM-SUCEDIDO (implicito no if)
-             # E a navegação do menu lateral foi bem-sucedida.
-             # Chama o método que clica "Adicionar" e seleciona o tipo de ficha.
-             # Este método _select_ficha_type_steps tem tratamento de erro interno com o handler.
-             # Se ele falhar, levantará uma exceção que a BaseTask capturará.
+    #          # --- CLICAR "Adicionar" e SELECIONAR TIPO DE FICHA ---
+    #          # Este passo SÓ DEVE ACONTECER SE CLICAR NO CENTRO FOI BEM-SUCEDIDO (implicito no if)
+    #          # E a navegação do menu lateral foi bem-sucedida.
+    #          # Chama o método que clica "Adicionar" e seleciona o tipo de ficha.
+    #          # Este método _select_ficha_type_steps tem tratamento de erro interno com o handler.
+    #          # Se ele falhar, levantará uma exceção que a BaseTask capturará.
             
 
-             # Após selecionar o tipo de ficha com sucesso, espera pelo iframe e retorna seu FrameLocator.
-             iframe_frame = await self._safe_switch_to_iframe(self._ESUS_IFRAME_SELECTOR, "Iframe Atendimento Individual (após selecionar tipo)")
-             logger.info("Navegação para Atendimento Individual (formulário) concluída.")
-             return iframe_frame # Retorna o FrameLocator
+    #          # Após selecionar o tipo de ficha com sucesso, espera pelo iframe e retorna seu FrameLocator.
+    #          iframe_frame = await self._safe_switch_to_iframe(self._ESUS_IFRAME_SELECTOR, "Iframe Atendimento Individual (após selecionar tipo)")
+    #          logger.info("Navegação para Atendimento Individual (formulário) concluída.")
+    #          return iframe_frame # Retorna o FrameLocator
 
-        else:
-            # Se a navegação no menu lateral falhou (ambas as estratégias),
-            # levantamos um erro final AQUI para que a BaseTask saiba que a navegação inicial falhou.
-            # Os erros específicos já foram logados nos excepts das estratégias.
-            raise AutomationError("Navegação inicial para a tela da ficha falhou (menu lateral inacessível).")
+    #     else:
+    #         # Se a navegação no menu lateral falhou (ambas as estratégias),
+    #         # levantamos um erro final AQUI para que a BaseTask saiba que a navegação inicial falhou.
+    #         # Os erros específicos já foram logados nos excepts das estratégias.
+    #         raise AutomationError("Navegação inicial para a tela da ficha falhou (menu lateral inacessível).")
 
 
     
