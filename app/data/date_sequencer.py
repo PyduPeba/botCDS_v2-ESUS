@@ -1,4 +1,4 @@
-# Arquivo: app/data/date_sequencer.py
+# Arquivo: app/data/date_sequencer.py (CORRIGIDO 56 - PARTE 1)
 import json
 import sys
 from pathlib import Path
@@ -55,64 +55,132 @@ class DateSequencer:
     def _is_weekend(self, date: datetime):
         """Verifica se uma data é final de semana."""
         return date.weekday() > 4 # 5 = Sábado, 6 = Domingo
-
-    def _proxima_data_util(self, data_inicial: datetime):
+    # Método auxiliar _proxima_data_util precisa receber a lista de datas a evitar
+    def _proxima_data_util(self, data_inicial: datetime, dates_to_avoid_str: set):
         """Encontra a próxima data útil (não final de semana ou na lista a ignorar)."""
         data = data_inicial
         # A lista a ignorar deve conter strings no formato "dd/mm/YYYY"
-        dates_to_ignore_str = [d for d in self._state.get('datas_a_ignorar', [])]
-
         while True:
             data += timedelta(days=1)
             data_str = data.strftime('%d/%m/%Y')
-            # Converte a data a ignorar para datetime para comparação precisa?
-            # Não, é mais seguro comparar strings formatadas se o input for string.
-            # Vamos assumir que 'datas_a_ignorar' no JSON já está em 'dd/mm/YYYY'
-            if data_str not in dates_to_ignore_str and not self._is_weekend(data):
+            if data_str not in dates_to_avoid_str and not self._is_weekend(data):
                 break
         return data # Retorna objeto datetime
 
-    def generate_sequence_dates(self, num_dates: int, start_date_str: str = None):
+    #Antiga geração de datas mais está usar a 1 data como base no primeiro arquivo.
+    # def generate_sequence_dates(self, num_dates: int, start_date_str: str = None):
+    #     """
+    #     Gera uma sequência de 'num_dates' datas úteis.
+    #     Se 'start_date_override' for fornecida e a sequência interna estiver vazia,
+    #     usa-a como a primeira data da sequência (se for útil) ou como ponto de partida.
+    #     """
+    #     # Se já houver datas na sequência, não gera novas a menos que a contagem não seja suficiente
+    #     if len(self._state.get('datas_seq', [])) >= num_dates:
+    #          logger.info("Sequência de datas já existente é suficiente.")
+    #          return self._state['datas_seq'][:num_dates] # Retorna apenas o número necessário
+
+    #     # Determina a data de início da geração
+    #     if start_date_str:
+    #         try:
+    #             current_date = datetime.strptime(start_date_str, '%d/%m/%Y')
+    #             logger.info(f"Iniciando geração de sequência a partir da data fornecida: {start_date_str}")
+    #         except ValueError:
+    #             logger.error(f"Formato inválido para start_date_str: {start_date_str}. Usando a última data usada no registro.")
+    #             current_date = self._get_last_used_date_obj() # Usa a última data usada
+
+    #     elif self._state.get('ultima_data_usada'):
+    #         current_date = self._get_last_used_date_obj()
+    #         logger.info(f"Iniciando geração de sequência a partir da última data usada no registro: {self._state['ultima_data_usada']}")
+    #     else:
+    #         # Se não houver start_date_str nem ultima_data_usada, começa a partir de hoje
+    #         current_date = datetime.today()
+    #         logger.warning("Nenhuma data inicial ou última data usada encontrada. Iniciando geração de sequência a partir de hoje.")
+
+    #     new_sequence = []
+    #     dates_to_avoid_str = set(self._state.get('datas_a_ignor', []) + self._state.get('datas_usadas', []) + self._state.get('datas_seq', []))
+
+    #     for _ in range(num_dates - len(self._state.get('datas_seq', []))): # Gera apenas as datas que faltam
+    #          # Encontra a próxima data útil, evitando as já usadas/a ignorar/na sequência
+    #          while True:
+    #             current_date += timedelta(days=1)
+    #             date_str = current_date.strftime('%d/%m/%Y')
+    #             if date_str not in dates_to_avoid_str and not self._is_weekend(current_date):
+    #                 new_sequence.append(date_str)
+    #                 dates_to_avoid_str.add(date_str) # Adiciona à lista de datas a evitar para as próximas iterações
+    #                 break # Sai do loop while e vai para a próxima data na sequência
+
+    #     self._state['datas_seq'].extend(new_sequence) # Adiciona as novas datas geradas à sequência existente
+    #     self._save_state()
+    #     logger.info(f"Sequência de {len(self._state['datas_seq'])} datas gerada/atualizada.")
+    #     return self._state['datas_seq']
+
+    def generate_sequence_dates(self, num_dates: int, start_date_override: str = None) -> list:
         """
-        Gera uma sequência de 'num_dates' datas úteis, começando após a última data usada
-        ou uma data inicial fornecida. Salva a sequência gerada no estado.
+        Gera uma sequência de 'num_dates' datas úteis.
+        Se 'start_date_override' for fornecida e a sequência interna estiver vazia,
+        usa-a como a primeira data da sequência (se for útil) ou como ponto de partida.
         """
-        # Se já houver datas na sequência, não gera novas a menos que a contagem não seja suficiente
+        # Se já houver datas na sequência e for suficiente, retorna a existente.
         if len(self._state.get('datas_seq', [])) >= num_dates:
              logger.info("Sequência de datas já existente é suficiente.")
-             return self._state['datas_seq'][:num_dates] # Retorna apenas o número necessário
-
-        # Determina a data de início da geração
-        if start_date_str:
-            try:
-                current_date = datetime.strptime(start_date_str, '%d/%m/%Y')
-                logger.info(f"Iniciando geração de sequência a partir da data fornecida: {start_date_str}")
-            except ValueError:
-                logger.error(f"Formato inválido para start_date_str: {start_date_str}. Usando a última data usada no registro.")
-                current_date = self._get_last_used_date_obj() # Usa a última data usada
-
-        elif self._state.get('ultima_data_usada'):
-            current_date = self._get_last_used_date_obj()
-            logger.info(f"Iniciando geração de sequência a partir da última data usada no registro: {self._state['ultima_data_usada']}")
-        else:
-            # Se não houver start_date_str nem ultima_data_usada, começa a partir de hoje
-            current_date = datetime.today()
-            logger.warning("Nenhuma data inicial ou última data usada encontrada. Iniciando geração de sequência a partir de hoje.")
+             return self._state['datas_seq'][:num_dates]
 
         new_sequence = []
-        dates_to_avoid_str = set(self._state.get('datas_a_ignor', []) + self._state.get('datas_usadas', []) + self._state.get('datas_seq', []))
+        
+        # Determina o ponto de partida para a GERAÇÃO
+        if start_date_override:
+            try:
+                start_gen_date_obj = datetime.strptime(start_date_override, '%d/%m/%Y')
+                logger.info(f"Usando data de override '{start_date_override}' para iniciar a geração da sequência.")
+            except ValueError:
+                logger.error(f"Formato inválido para start_date_override: {start_date_override}. Ignorando override.")
+                start_gen_date_obj = self._get_last_used_date_obj() # Fallback
+        elif self._state.get('ultima_data_usada'):
+            start_gen_date_obj = self._get_last_used_date_obj()
+            logger.info(f"Usando 'ultima_data_usada' '{self._state['ultima_data_usada']}' para iniciar a geração da sequência.")
+        else:
+            start_gen_date_obj = datetime.today()
+            logger.warning("Nenhuma data inicial ou última data usada encontrada. Iniciando geração a partir de hoje.")
+        
+        current_date = start_gen_date_obj # Inicia com a data determinada
 
-        for _ in range(num_dates - len(self._state.get('datas_seq', []))): # Gera apenas as datas que faltam
-             # Encontra a próxima data útil, evitando as já usadas/a ignorar/na sequência
-             while True:
-                current_date += timedelta(days=1)
-                date_str = current_date.strftime('%d/%m/%Y')
-                if date_str not in dates_to_avoid_str and not self._is_weekend(current_date):
-                    new_sequence.append(date_str)
-                    dates_to_avoid_str.add(date_str) # Adiciona à lista de datas a evitar para as próximas iterações
-                    break # Sai do loop while e vai para a próxima data na sequência
+        dates_to_avoid_str = set(self._state.get('datas_a_ignorar', []) + self._state.get('datas_usadas', []) + self._state.get('datas_seq', []))
 
-        self._state['datas_seq'].extend(new_sequence) # Adiciona as novas datas geradas à sequência existente
+        # Se a sequência está vazia e temos uma data de override que ainda não foi usada,
+        # podemos considerar essa data como o primeiro item da sequência, se ela for útil.
+        # Caso contrário, geramos a partir do próximo dia útil.
+        if not self._state.get('datas_seq') and start_date_override:
+            start_date_override_normalized = datetime.strptime(start_date_override, '%d/%m/%Y')
+            start_date_override_str = start_date_override_normalized.strftime('%d/%m/%Y')
+
+            # Verifica se a data de override já é um dia útil e não está na lista de datas a evitar
+            if not self._is_weekend(start_date_override_normalized) and start_date_override_str not in dates_to_avoid_str:
+                new_sequence.append(start_date_override_str)
+                dates_to_avoid_str.add(start_date_override_str) # Adiciona para evitar duplicidade
+                current_date = start_date_override_normalized # O próximo cálculo começará a partir dela.
+                logger.debug(f"Adicionando '{start_date_override_str}' como primeira data da sequência (override).")
+            else:
+                logger.debug(f"Data de override '{start_date_override_str}' não é útil ou já está em uso. Gerando a partir do próximo dia útil.")
+                # Se a data de override não puder ser a primeira, o current_date já está setado para ela,
+                # e o loop abaixo vai para o próximo dia útil.
+        
+        # Gera as datas restantes até atingir num_dates
+        # Se new_sequence já tem um item (o override), gera num_dates - 1 a partir do próximo.
+        # Se new_sequence está vazia, gera num_dates a partir do próximo dia útil após current_date.
+        while len(new_sequence) < num_dates:
+            current_date = self._proxima_data_util(current_date, dates_to_avoid_str) # Encontra a próxima data útil
+            date_str = current_date.strftime('%d/%m/%Y')
+            
+            if date_str not in dates_to_avoid_str: # Dupla verificação
+                new_sequence.append(date_str)
+                dates_to_avoid_str.add(date_str) # Adiciona à lista de datas a evitar para próximas iterações
+            else:
+                # Isso não deveria acontecer se _proxima_data_util está correto,
+                # mas é uma salvaguarda para evitar loops infinitos se _proxima_data_util falhar.
+                logger.warning(f"Data '{date_str}' já está na lista a evitar, pulando para a próxima tentativa.")
+                current_date += timedelta(days=1) # Tenta a próxima data imediatamente
+
+        self._state['datas_seq'].extend(new_sequence)
         self._save_state()
         logger.info(f"Sequência de {len(self._state['datas_seq'])} datas gerada/atualizada.")
         return self._state['datas_seq']

@@ -1,4 +1,4 @@
-# Arquivo: app/automation/tasks/base_task.py (CORRIGIDO 51)
+# Arquivo: app/automation/tasks/base_task.py (CORRIGIDO 57)
 from abc import ABC, abstractmethod # Usamos ABC para criar classes abstratas
 from playwright.async_api import Page, Locator
 import pandas as pd
@@ -86,18 +86,19 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
 
             # --- Passo 3: Gerenciar a Sequência de Arquivos e Datas ---
             # Lógica para contar quantos arquivos não processados existem e gerar datas para eles.
-            main_date_for_sequence_generation = file_manager.load_main_date_file()
-            if not main_date_for_sequence_generation:
+            main_date_initial_from_file = file_manager.load_main_date_file()
+            if not main_date_initial_from_file:
                  logger.warning("Não foi possível carregar a data principal de data.csv para geração de sequência. Usando data atual.")
-                 main_date_for_sequence_generation = datetime.now().strftime('%d/%m/%Y') # Fallback
+                 main_date_initial_from_file = datetime.now().strftime('%d/%m/%Y') # Fallback
 
-            logger.info(f"Data principal para sequência: {main_date_for_sequence_generation}")
-            num_unprocessed_files_total = file_manager.count_all_unprocessed_files() # PRECISA SER IMPLEMENTADO NO FileManager
+
+            num_unprocessed_files_total = file_manager.count_all_unprocessed_files() # Método em FileManager
 
             if num_unprocessed_files_total > 0:
+                 # GERA a sequência de datas. O PRIMEIRO item da sequência PODE SER o main_date_initial_from_file.
                  date_sequence_for_session = date_sequencer.generate_sequence_dates(
-                     num_files_dates_needed=num_unprocessed_files_total,
-                     start_date_override=main_date_for_sequence_generation
+                     num_dates=num_unprocessed_files_total,
+                     start_date_override=main_date_initial_from_file # Passa a data do data.csv para a geração
                  )
                  logger.info(f"Sequência de datas gerada/obtida para {num_unprocessed_files_total} arquivos: {date_sequence_for_session}")
 
@@ -106,8 +107,9 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
 
             else:
                  logger.info("Nenhum arquivo de dados a processar nesta sessão.")
-                 self.finished.emit("Nenhum arquivo para processar") # Emitir self.finished.emit do Worker
-                 return # Sai do método run
+                #  await self._browser_manager.close_browser()
+                #  self.finished.emit("Nenhum arquivo para processar")
+                 return
 
 
             # --- Passo 4: Loop WHILE encontrar arquivos a processar ---
@@ -169,6 +171,22 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
                  # Preencher a data
                  await self._common_forms.fill_date_field(self._current_iframe_frame, current_main_date_for_file)
                  logger.info(f"Data principal '{current_main_date_for_file}' preenchida com sucesso para este arquivo.")
+
+                 # ** NOVO PASSO: CLICAR NO BOTÃO "Adicionar" APÓS PREENCHER A DATA PRINCIPAL **
+                 # Isso faz o sistema entender que o cabeçalho da ficha foi preenchido
+                 # e prepara a área para os dados do PRIMEIRO PACIENTE.
+                 logger.info("Clicando em 'Adicionar' para preparar o formulário para o primeiro registro do arquivo.")
+                 add_for_first_record_successful = False # Flag para retentativa
+                 while not add_for_first_record_successful:
+                      try:
+                           await self._main_menu.click_add_button_in_iframe(self._current_iframe_frame) # CLICA ADICIONAR
+                           await asyncio.sleep(1.5) # Espera o formulário do paciente aparecer
+                           add_for_first_record_successful = True
+                      except SkipRecordException: raise
+                      except AbortAutomationException: raise
+                      except Exception as e:
+                           logger.error(f"Erro no clique em 'Adicionar' após data principal para arquivo {current_data_file_path.name}. Tentando novamente: {e}")
+                           await self._handler.handle_error(e, step_description=f"Clique 'Adicionar' após data principal para arquivo {current_data_file_path.name}")
 
 
                  # --- 4e. Loop Principal pelos Registros DESTE ARQUIVO ---
