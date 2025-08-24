@@ -202,14 +202,19 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
                  logger.info(f"Todas as linhas do arquivo {current_data_file_path.name} processadas (ou puladas/abortadas).")
                  file_manager.mark_file_as_processed(current_data_file_path)
 
+                 # ** NOVO PASSO: CLICAR EM "FINALIZAR REGISTROS" PARA ESTE ARQUIVO **
+                 logger.info(f"Finalizando registros para o arquivo {current_data_file_path.name} (clicando Finalizar registros).")
+                 await self._finalize_task() # Chama o método abstrato que clica Finalizar registros
+                 logger.info(f"Finalização para o arquivo {current_data_file_path.name} concluída.")
+
                  # --- 4g. Encontrar o Próximo arquivo para a PRÓXIMA iteração do loop while ---
                  current_data_file_path = file_manager.find_next_file_to_process()
 
 
             # --- Passo 5: Finalizar Lote (Após TODOS os arquivos serem processados) ---
             logger.info(f"Loop principal de arquivos finalizado. Total de registros processados na sessão: {self._processed_count_total}, pulados: {self._skipped_count_total}.")
-            logger.info("Finalizando lote (clicando Finalizar registros).")
-            await self._finalize_task() # Chama o método abstrato que agora clicará Finalizar registros
+            logger.info("Sessão de automação concluída. Todos os arquivos foram processados e finalizados.")
+            # await self._finalize_task() # Chama o método abstrato que agora clicará Finalizar registros
 
             logger.info(f"Execução da tarefa '{self.__class__.__name__}' concluída.")        
 
