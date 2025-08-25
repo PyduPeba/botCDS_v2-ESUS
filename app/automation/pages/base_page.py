@@ -1,9 +1,10 @@
-# Arquivo: app/automation/pages/base_page.py
+# Arquivo: app/automation/pages/base_page.py (CORRIGIDO 64)
 from playwright.async_api import Page, Locator
 from app.core.logger import logger
 from app.core.errors import ElementNotFoundError, ElementNotInteractableError, AutomationError
 from app.automation.error_handler import AutomationErrorHandler # Importamos o handler
 import asyncio # Importamos asyncio para await sleeps controlados
+from playwright._impl._errors import TimeoutError # Importa TimeoutError
 
 class BasePage:
     """
@@ -13,6 +14,31 @@ class BasePage:
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         self._page = page # A instância da página Playwright
         self._handler = error_handler # A instância do gerenciador de erros
+    
+    # ** ATRIBUTOS E MÉTODOS PARA MÁSCARA DE CARREGAMENTO E POPUPS **
+    _LOADING_MASK_SELECTOR = 'div.ext-el-mask' # Seletor para a máscara de carregamento ExtJS
+    _MESSAGE_BOX_POPUP_SELECTOR = 'div[peid="message-box"]' # Seletor padrão para o popup message-box
+    _MESSAGE_BOX_OK_BUTTON_SELECTOR = f'{_MESSAGE_BOX_POPUP_SELECTOR} button:has-text("OK")' # Botão OK
+
+    async def _wait_for_loading_mask_to_disappear(self, timeout=5000):
+        """
+        Espera a máscara de carregamento (div.ext-el-mask) desaparecer.
+        Se a máscara não sumir, aciona o handler manual.
+        """
+        mask_locator = self._page.locator(self._LOADING_MASK_SELECTOR)
+        try:
+            logger.debug(f"Esperando a máscara de carregamento desaparecer (Selector: {mask_locator.locator})...")
+            await mask_locator.wait_for(state="hidden", timeout=timeout)
+            logger.debug("Máscara de carregamento desapareceu.")
+        except TimeoutError:
+            logger.warning("Timeout esperando a máscara de carregamento desaparecer.")
+            # Chamamos o handler com um erro sobre a máscara.
+            # O handler pausará. Se o usuário continuar, o _safe_... tentará o clique mesmo assim.
+            await self._handler.handle_error(TimeoutError("Máscara de carregamento não desapareceu."),
+                                              step_description="Esperando máscara de carregamento sumir")
+        except Exception as e:
+            logger.error(f"Erro inesperado ao esperar máscara de carregamento: {e}", exc_info=True)
+            await self._handler.handle_error(e, step_description="Erro inesperado esperando máscara de carregamento")
 
     async def _safe_click(self, locator: Locator, step_description: str):
      """Clica em um elemento com tratamento de erro."""
@@ -37,6 +63,35 @@ class BasePage:
      except Exception as e:
          await self._handler.handle_error(e, step_description=f"Preencher: {step_description}", data_row={"text_to_fill": text})
         #  raise e
+    
+    async def _safe_fill_simule(self, locator: Locator, text: str, step_description: str, delay_ms: int = 100):
+        """
+        Simula digitação realista em um campo de texto, usando `.type()` com delay entre teclas.
+        Útil para campos que disparam eventos como autocomplete apenas com interação humana.
+        """
+        logger.debug(f"Tentando simular preenchimento do campo: '{step_description}' com texto: '{text}' (Selector: {locator.locator})")
+        try:
+            # Aguarda o campo estar visível
+            await locator.wait_for(state="visible", timeout=10000)
+
+            # Clica no campo para focar
+            await locator.click()
+            await asyncio.sleep(0.1)
+
+            # Limpa o campo antes de digitar
+            await locator.fill("")  # Opcional: use select_all + Backspace se necessário
+
+            # Digita simulando usuário real
+            await locator.type(text, delay=delay_ms)
+            await asyncio.sleep(0.1) # Pequena pausa após digitar
+
+            logger.debug(f"Campo '{step_description}' preenchido com sucesso usando digitação simulada.")
+
+        except Exception as e:
+            logger.error(f"Erro ao simular preenchimento de '{step_description}': {e}", exc_info=True)
+            await self._handler.handle_error(e, step_description=f"Preencher (simulado): {step_description}", data_row={"text_to_fill": text})
+            # raise e
+
 
     async def _safe_select_option(self, locator: Locator, value: str, step_description: str):
          """Seleciona uma opção em um dropdown (seletor <select>) com tratamento de erro."""
@@ -143,6 +198,36 @@ class BasePage:
             # Isso provavelmente não acontecerá a menos que haja um problema inesperado com o logger ou handler
             await self._handler.handle_error(e, step_description="Mudar para conteúdo principal")
             # Re-levantar implicitamente
+    
+    
+
+    async def _handle_ciap_alert(self, page_or_frame: Page | Locator) -> str:
+        """
+        Lida com popups de alerta padrão (message-box) que podem aparecer após certas interações.
+        Retorna "handled" se o popup foi detectado e o OK clicado, "not_detected" caso contrário, "error" se houve falha no tratamento.
+        """
+        logger.debug("Verificando por popup de alerta padrão (message-box)...")
+        popup_locator = page_or_frame.locator(self._MESSAGE_BOX_POPUP_SELECTOR)
+
+        try:
+            # Espera um curto período pelo popup. Se aparecer, o try tem sucesso.
+            await popup_locator.wait_for(state="visible", timeout=2000)
+            logger.warning("Popup de alerta padrão (message-box) detectado. Clicando em 'OK'.")
+
+            ok_button_locator = page_or_frame.locator(self._MESSAGE_BOX_OK_BUTTON_SELECTOR)
+            await self._safe_click(ok_button_locator, step_description="Botão 'OK' no popup message-box")
+            logger.debug("Botão 'OK' do popup message-box clicado.")
+            await popup_locator.wait_for(state="hidden", timeout=2000)
+            logger.debug("Popup message-box fechado.")
+            return "handled"
+
+        except TimeoutError:
+            logger.debug("Popup de alerta padrão (message-box) NÃO detectado.")
+            return "not_detected"
+        except Exception as e:
+            logger.error(f"Erro inesperado ao tentar tratar popup de alerta padrão: {e}", exc_info=True)
+            # Não levanta exceção aqui, pois já estamos dentro de um handler ou chamando como utilitário.
+            return "error" # Sinaliza que houve um erro no tratamento.
 
 
 # # Exemplo de uso (para teste do módulo - precisa de um mock de Page e ErrorHandler)

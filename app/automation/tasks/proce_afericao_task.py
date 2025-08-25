@@ -19,47 +19,77 @@ class ProcedimentoAfericaoTask(BaseTask):
         return await self._main_menu.navigate_to_procedimentos()
         # navigate_to_procedimentos já retorna o FrameLocator do iframe
 
+    # Antiga versão do Código de process_row, comentada para referência
+    # async def process_row(self, iframe_frame: Locator, row_data: list):
+    #     """
+    #     Processa uma única linha de dados para registrar um procedimento de Aferição.
+    #     Implementa o método abstrato da BaseTask.
+    #     Recebe o FrameLocator do iframe e os dados da linha.
+    #     """
+    #     logger.debug(f"Processando linha para Procedimento Aferição: {row_data}")
+
+    #     # Preenche os campos comuns do paciente (Período, CPF, Data Nasc, Gênero, Local)
+    #     # NOTA: Verifique no seu site real se a ficha de Procedimentos tem EXATAMENTE os mesmos campos comuns
+    #     # que a ficha de Atendimento Individual. Se não, você pode precisar ajustar _fill_common_patient_data
+    #     # ou criar um método similar específico para Procedimentos na BaseTask.
+    #     # Assumindo por enquanto que são os mesmos.
+    #     await self._fill_common_patient_data(iframe_frame, row_data)
+
+    #     # Preenche os campos ESPECÍFICOS da ficha de Procedimentos para Aferição
+    #     # No seu código original, para aferição, você preenchia o SIGTAP "0301100039".
+    #     # Não há outros campos específicos do CSV para este procedimento no seu código original.
+
+    #     sigtap_code = "0301100039" # Código SIGTAP fixo para Aferição
+
+    #     # Chama os métodos da classe ProcedimentoForm para preencher estes campos
+    #     await self._procedimento_form.fill_sigtap_code(iframe_frame, sigtap_code)
+
+    #     # NOTA: No seu código original, não parecia haver um botão de "Confirmar"
+    #     # para o BLOCO de procedimentos (como o Outros SIA). Apenas o "Confirmar"
+    #     # da ficha principal. Se houver um botão "Adicionar Procedimento" após
+    #     # preencher o SIGTAP e antes de confirmar a ficha, adicione a lógica aqui.
+    #     # Assumindo que após preencher o SIGTAP, você apenas clica no Confirmar da ficha.
+
+    #     # Clica no botão "Confirmar" da ficha de Procedimentos
+    #     # Este método já lida com possíveis alertas (como "Campos duplicados")
+    #     await self._procedimento_form.click_confirm_button(iframe_frame)
+
+    #     logger.debug("Campos específicos de Procedimento Aferição preenchidos e Confirmar clicado.")
+
+    #     # Nota: A lógica de clicar em "Adicionar" para a próxima linha (NOVA FICHA) está na BaseTask (_process_all_rows).
+    #     # Se a lógica for adicionar MULTIPLOS procedimentos DENTRO da mesma ficha
+    #     # antes de confirmar, o clique no "Adicionar" precisa ser movido para DENTRO
+    #     # deste método process_row (e a BaseTask precisaria ser ajustada para não clicar "Adicionar" automaticamente).
+    #     # Assumindo que cada linha do CSV é uma NOVA FICHA de procedimento.
     async def process_row(self, iframe_frame: Locator, row_data: list):
         """
-        Processa uma única linha de dados para registrar um procedimento de Aferição.
-        Implementa o método abstrato da BaseTask.
-        Recebe o FrameLocator do iframe e os dados da linha.
+        Processa uma única linha de dados para registrar procedimentos de Aferição
+        (dois códigos SIGTAP).
         """
         logger.debug(f"Processando linha para Procedimento Aferição: {row_data}")
 
-        # Preenche os campos comuns do paciente (Período, CPF, Data Nasc, Gênero, Local)
-        # NOTA: Verifique no seu site real se a ficha de Procedimentos tem EXATAMENTE os mesmos campos comuns
-        # que a ficha de Atendimento Individual. Se não, você pode precisar ajustar _fill_common_patient_data
-        # ou criar um método similar específico para Procedimentos na BaseTask.
-        # Assumindo por enquanto que são os mesmos.
+        # Preenche os campos comuns do paciente
         await self._fill_common_patient_data(iframe_frame, row_data)
 
-        # Preenche os campos ESPECÍFICOS da ficha de Procedimentos para Aferição
-        # No seu código original, para aferição, você preenchia o SIGTAP "0301100039".
-        # Não há outros campos específicos do CSV para este procedimento no seu código original.
+        # --- Preenche o PRIMEIRO Código SIGTAP ---
+        sigtap_code_1 = "0301100039"
+        logger.info(f"Preenchendo PRIMEIRO Código SIGTAP: {sigtap_code_1}")
+        await self._procedimento_form.fill_sigtap_code(iframe_frame, sigtap_code_1)
+        await asyncio.sleep(0.5)
+        # Após esta chamada, o procedimento 1 deve ter sido adicionado à lista e o campo limpo.
 
-        sigtap_code = "0301100039" # Código SIGTAP fixo para Aferição
 
-        # Chama os métodos da classe ProcedimentoForm para preencher estes campos
-        await self._procedimento_form.fill_sigtap_code(iframe_frame, sigtap_code)
+        # --- Preenche o SEGUNDO Código SIGTAP ---
+        sigtap_code_2 = "0101040024"
+        logger.info(f"Preenchendo SEGUNDO Código SIGTAP: {sigtap_code_2}")
+        # Chama fill_sigtap_code novamente. Ele vai limpar o campo (se tiver algo) e preencher o segundo.
+        await self._procedimento_form.fill_sigtap_code(iframe_frame, sigtap_code_2)
+        await asyncio.sleep(0.5)
 
-        # NOTA: No seu código original, não parecia haver um botão de "Confirmar"
-        # para o BLOCO de procedimentos (como o Outros SIA). Apenas o "Confirmar"
-        # da ficha principal. Se houver um botão "Adicionar Procedimento" após
-        # preencher o SIGTAP e antes de confirmar a ficha, adicione a lógica aqui.
-        # Assumindo que após preencher o SIGTAP, você apenas clica no Confirmar da ficha.
 
-        # Clica no botão "Confirmar" da ficha de Procedimentos
-        # Este método já lida com possíveis alertas (como "Campos duplicados")
+        # --- Clica no botão "Confirmar" da ficha de Procedimentos (APÓS AMBOS OS SIGTAPS) ---
         await self._procedimento_form.click_confirm_button(iframe_frame)
-
-        logger.debug("Campos específicos de Procedimento Aferição preenchidos e Confirmar clicado.")
-
-        # Nota: A lógica de clicar em "Adicionar" para a próxima linha (NOVA FICHA) está na BaseTask (_process_all_rows).
-        # Se a lógica for adicionar MULTIPLOS procedimentos DENTRO da mesma ficha
-        # antes de confirmar, o clique no "Adicionar" precisa ser movido para DENTRO
-        # deste método process_row (e a BaseTask precisaria ser ajustada para não clicar "Adicionar" automaticamente).
-        # Assumindo que cada linha do CSV é uma NOVA FICHA de procedimento.
+        logger.debug("Campos específicos de Procedimento Aferição (dois SIGTAP) preenchidos e Confirmar clicado.")
 
     async def _finalize_task(self):
         """
