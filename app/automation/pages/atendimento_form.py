@@ -33,9 +33,14 @@ class AtendimentoForm(BasePage):
     # Precisamos de um jeito mais robusto. Playwright pode encontrar elementos por texto ou contendo outros elementos.
     # Seletor para o contêiner onde ficam os checkboxes de exames (se houver um PEID ou classe)
     _EXAMES_CONTAINER_SELECTOR = '[peid="FichaAtendimentoIndividualChildForm.examesSolicitados"]' # Exemplo do seu código
+    _ALL_S_CHECKBOXES_IN_EXAMES_SELECTOR = 'div.x-form-check-wrap:has(label:has-text("S")) input[type="checkbox"]' # Seleciona o input
+    _ALL_S_LABELS_IN_EXAMES_SELECTOR = 'div.x-form-check-wrap:has(label:has-text("S")) label' # Seleciona o label (para clicar)
     # Seletor genérico para checkboxes DENTRO do container de exames
     _EXAME_CHECKBOX_IN_CONTAINER_SELECTOR = 'input[type="checkbox"]'
     _EXAME_LABEL_IN_CONTAINER_SELECTOR = 'input[type="checkbox"] + label' # Label que segue um checkbox
+    _EXAME_LABEL_SELECTOR_IN_CONTAINER = 'label'
+    _HEMOGLOBINA_GLICADA_LABEL_SELECTOR = 'label:has-text("A - Hemoglobina glicada")'
+    _GENERIC_S_CHECKBOX_LABEL_SELECTOR_IN_EXAMES = 'label:has-text("S")'
     # Conduta (checkboxes)
     # Usaremos um template ou buscaremos por texto porque há vários checkboxes
     _CONDUTA_CHECKBOX_XPATH_TEMPLATE = '//label[contains(text(), "{}")]/preceding-sibling::input[@type="checkbox"]' # Exemplo: substitui {} pelo texto parcial (e.g., "Retorno agendado")
@@ -56,6 +61,8 @@ class AtendimentoForm(BasePage):
     # ** NOVO SELETOR PARA O POPUP PADRÃO peid="message-box" **
     _MESSAGE_BOX_POPUP_SELECTOR = 'div[peid="message-box"]'
     _MESSAGE_BOX_OK_BUTTON_SELECTOR = f'{_MESSAGE_BOX_POPUP_SELECTOR} button:has-text("OK")' # Botão OK dentro deste popup
+
+    _CONDUTA_FIXA_LABEL_SELECTOR = 'label:has-text("Retorno para consulta agendada")'
 
 
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
@@ -179,57 +186,88 @@ class AtendimentoForm(BasePage):
              logger.debug("Nenhum popup de alerta de CIAP encontrado.")
 
 
-    async def select_exame(self, iframe_frame: Locator, exame_text: str = "S - Hemoglobina glicada"):
+    async def select_exame(self, iframe_frame: Locator, exame_text: str = "A - Hemoglobina glicada", s_checkbox_position: int = 10):
         """
-        Seleciona um exame na lista (checkbox).
-        Encontra pelo texto do label associado para ser mais robusto.
+        Seleciona um checkbox "S" específico (pela posição) dentro da seção de exames.
+        O 'exame_text' é usado para logar qual exame estamos marcando o "S" para.
         """
-        logger.info(f"Selecionando exame: {exame_text}")
+        logger.info(f"Selecionando o {s_checkbox_position}º checkbox 'S' para o exame: {exame_text}.")
+
+        if not isinstance(exame_text, str) or not exame_text:
+             logger.warning(f"Valor inválido ou vazio para Exame: '{exame_text}'. Pulando seleção.")
+             # Não levanta erro fatal aqui, apenas warning. A tarefa Diabético continua.
+             return
+
+
         try:
-            # Tenta encontrar o label que contém o texto do exame DENTRO do container de exames
-            # ou diretamente no iframe se o container não for encontrado/usado.
+            # 1. Encontrar o contêiner da área de Exames (já corrigido)
             container_locator = iframe_frame.locator(self._EXAMES_CONTAINER_SELECTOR)
-            if await container_locator.count() == 0:
-                 logger.warning(f"Contêiner de exames ({self._EXAMES_CONTAINER_SELECTOR}) não encontrado. Buscando label diretamente no iframe.")
-                 search_area_locator = iframe_frame # Busca no iframe inteiro
-            else:
-                 search_area_locator = container_locator.first # Busca dentro do primeiro container encontrado
+            await container_locator.wait_for(state="visible", timeout=10000) # Espera a área aparecer
+            logger.debug("Contêiner de Exames visível. Buscando checkboxes 'S'...")
 
-            label_locator = search_area_locator.locator(self._EXAME_LABEL_IN_CONTAINER_SELECTOR, has_text=exame_text).first
+            # 2. Encontrar TODOS os labels "S" dentro deste contêiner
+            all_s_labels_locator = container_locator.locator(self._ALL_S_LABELS_IN_EXAMES_SELECTOR)
+            s_labels_count = await all_s_labels_locator.count()
 
-            # Do label encontrado, tenta encontrar o checkbox que o precede.
-            # Ou, tenta clicar diretamente no label (mais comum e eficaz).
-            checkbox_locator = label_locator.locator('..').locator('input[type="checkbox"]') # Tenta encontrar o checkbox
-            # Vamos tentar clicar no LABEL diretamente como a estratégia principal
-            logger.debug(f"Tentando clicar no label para Exame: {exame_text} (Selector: {label_locator.locator})")
-            await self._safe_click(label_locator, step_description=f"Label Checkbox Exame: {exame_text}")
-            logger.debug(f"Label para Exame '{exame_text}' clicado com sucesso.")
+            if s_labels_count == 0:
+                 logger.warning(f"Nenhum label 'S' encontrado na seção de Exames. Não é possível selecionar o {s_checkbox_position}º 'S'.")
+                 raise AutomationError(f"Nenhum checkbox 'S' encontrado na seção de Exames.")
 
-            # Opcional: Se clicar no label não funcionar, tentar clicar no checkbox diretamente como fallback:
-            # if not (await checkbox_locator.is_checked()): # Verificar se o checkbox foi marcado
-            #      logger.warning(f"Label para Exame '{exame_text}' não marcou o checkbox. Tentando clicar direto no checkbox.")
-            #      await self._safe_click(checkbox_locator, step_description=f"Checkbox Exame (fallback): {exame_text}")
+            if s_checkbox_position <= 0 or s_checkbox_position > s_labels_count:
+                 logger.warning(f"Posição {s_checkbox_position} para checkbox 'S' está fora do range (1 a {s_labels_count}). Não é possível selecionar.")
+                 raise AutomationError(f"Posição {s_checkbox_position} para checkbox 'S' é inválida.")
+
+            # 3. Clicar no N-ésimo label "S"
+            target_s_label_locator = all_s_labels_locator.nth(s_checkbox_position - 1) # nth é 0-indexed
+            
+            await self._safe_click(target_s_label_locator, step_description=f"Checkbox 'S' na posição {s_checkbox_position} para Exame: {exame_text}")
+            logger.debug(f"Checkbox 'S' na posição {s_checkbox_position} clicado com sucesso para Exame '{exame_text}'.")
+            await asyncio.sleep(1) # Pausa após clicar no S
 
 
         except Exception as e:
-            logger.error(f"Erro ao selecionar exame '{exame_text}': {e}")
-            raise AutomationError(f"Falha ao selecionar Exame '{exame_text}' no iframe.") from e
+            logger.error(f"Erro durante seleção do {s_checkbox_position}º checkbox 'S' para o exame '{exame_text}': {e}", exc_info=True)
+            raise AutomationError(f"Falha ao selecionar {s_checkbox_position}º checkbox 'S' para Exame '{exame_text}' no iframe.") from e
 
 
-    async def select_conduta(self, iframe_frame: Locator, conduta: str):
-        """Seleciona uma Conduta (checkbox) clicando no label associado."""
-        logger.info(f"Selecionando Conduta: {conduta}")
+
+    #Versão anterior que usava ARQUIVO CSV com nomes de condutas
+    # async def select_conduta(self, iframe_frame: Locator, conduta: str):
+    #     """Seleciona uma Conduta (checkbox) clicando no label associado."""
+    #     logger.info(f"Selecionando Conduta: {conduta}")
+    #     try:
+    #         # Usa o seletor template label:has-text e clica no label.
+    #         label_selector = self._CONDUTA_CHECKBOX_SELECTOR_TEMPLATE.format(conduta)
+    #         label_locator = iframe_frame.locator(label_selector)
+    #         logger.debug(f"Tentando clicar no label para Conduta: {conduta} (Selector: {label_locator.locator})")
+    #         await self._safe_click(label_locator, step_description=f"Checkbox Conduta: {conduta}")
+    #         logger.debug(f"Label para Conduta '{conduta}' clicado com sucesso.")
+
+    #     except Exception as e:
+    #         logger.error(f"Erro ao selecionar Conduta '{conduta}': {e}")
+    #         raise AutomationError(f"Falha ao selecionar Conduta '{conduta}' no iframe.") from e
+    async def select_conduta(self, iframe_frame: Locator, conduta: str): # conduta: str ainda existe como parâmetro, mas será ignorado
+        """
+        Seleciona a Conduta fixa "Retorno para consulta agendada".
+        """
+        fixed_conduta_text = "Retorno para consulta agendada"
+        logger.info(f"Selecionando Conduta FIXA: {fixed_conduta_text}")
+
+        # ** OPCIONAL: Se quiser que o parâmetro 'conduta' ainda seja verificado ou logado **
+        # logger.debug(f"Conduta recebida do CSV (ignorada): '{conduta}'")
+        # if conduta != fixed_conduta_text:
+        #     logger.warning(f"Conduta do CSV '{conduta}' difere da conduta fixa '{fixed_conduta_text}'. Usando fixa.")
+
         try:
-            # Usa o seletor template label:has-text e clica no label.
-            label_selector = self._CONDUTA_CHECKBOX_SELECTOR_TEMPLATE.format(conduta)
-            label_locator = iframe_frame.locator(label_selector)
-            logger.debug(f"Tentando clicar no label para Conduta: {conduta} (Selector: {label_locator.locator})")
-            await self._safe_click(label_locator, step_description=f"Checkbox Conduta: {conduta}")
-            logger.debug(f"Label para Conduta '{conduta}' clicado com sucesso.")
+            # ** 1. BUSCAR E CLICAR NO LABEL DA CONDUTA FIXA **
+            label_locator = iframe_frame.locator(self._CONDUTA_FIXA_LABEL_SELECTOR)
+            logger.debug(f"Tentando clicar no label para Conduta FIXA: {fixed_conduta_text} (Selector: {label_locator.locator})")
+            await self._safe_click(label_locator, step_description=f"Checkbox Conduta: {fixed_conduta_text}")
+            logger.debug(f"Label para Conduta FIXA '{fixed_conduta_text}' clicado com sucesso.")
 
         except Exception as e:
-            logger.error(f"Erro ao selecionar Conduta '{conduta}': {e}")
-            raise AutomationError(f"Falha ao selecionar Conduta '{conduta}' no iframe.") from e
+            logger.error(f"Erro ao selecionar Conduta FIXA '{fixed_conduta_text}': {e}", exc_info=True)
+            raise AutomationError(f"Falha ao selecionar Conduta FIXA '{fixed_conduta_text}' no iframe.") from e
 
     async def click_confirm_button(self, iframe_frame: Locator):
          """Clica no botão 'Confirmar' da ficha de Atendimento Individual."""
