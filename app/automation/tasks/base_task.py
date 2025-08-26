@@ -1,4 +1,4 @@
-# Arquivo: app/automation/tasks/base_task.py (CORRIGIDO 57)
+# Arquivo: app/automation/tasks/base_task.py (Versão funcional até 25.08)
 from abc import ABC, abstractmethod # Usamos ABC para criar classes abstratas
 from playwright.async_api import Page, Locator
 import pandas as pd

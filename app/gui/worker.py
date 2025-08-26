@@ -17,6 +17,7 @@ from app.automation.tasks.proce_afericao_task import ProcedimentoAfericaoTask
 from app.automation.tasks.proce_saude_repro_task import ProcedimentoSaudeReproTask
 from app.automation.tasks.atend_saude_repro_task import AtendimentoSaudeReproTask # Nova tarefa incluída
 from app.automation.tasks.hipertenso_procedimento_task import HipertensoProcedimentoTask # A tarefa combinada
+from app.automation.tasks.proce_diabetes_task import ProcedimentoDiabeticoTask
 from app.data.file_manager import FileManager
 from app.data.date_sequencer import DateSequencer
 from app.core.app_config import AppConfig # Para verificar a configuração de apagar arquivo
@@ -32,7 +33,8 @@ TASK_MAP = {
     "Atendimento SEM DOENÇA": AtendimentoA97Task,
     "Atendimento Saúde Sexual": AtendimentoSaudeReproTask, # Nova tarefa incluída
     "Procedimentos Aferição": ProcedimentoAfericaoTask,
-    "Procedimento Sáude Sexual": ProcedimentoSaudeReproTask, # Ou ProcedimentoSaudeReproTask? Sim, é Procedimento.
+    "Procedimento Sáude Sexual": ProcedimentoSaudeReproTask,
+    "Procedimento Diabéticos": ProcedimentoDiabeticoTask, 
     "Hipertenso e Procedimento": HipertensoProcedimentoTask,
     # Adicione outras tarefas aqui
 }

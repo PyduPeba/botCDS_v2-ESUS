@@ -35,6 +35,11 @@ class ProcedimentoForm(BasePage):
     # _SIGTAP_SUGGESTION_ITEM_XPATH_TEMPLATE = "//div[contains(@class, 'x-combo-list-inner')]//div[contains(@class, 'search-item') and contains(@class, 'x-combo-selected')]//*[self::b or self::td][starts-with(normalize-space(), '{}')]"
     #-----------xxxxxxxxxxxxxxxxxxxxxxxxxx----------------#
 
+    # ** NOVOS SELETORES PARA A SEÇÃO "Procedimentos / Pequenas cirurgias" **
+    _EXAME_PE_DIABETICO_TEXT = "Exame do pé diabético"
+    _PEQUENAS_CIRURGIAS_CONTAINER_XPATH = "//div[@peid='FichaProcedimentosChildForm.procedimentos']"
+
+
     # _SIGTAP_SUGGESTION_ITEM_NAME_TEMPLATE = "{} - AFERIÇÃO DE PRESSÃO ARTERIAL"
     # Seletor para o contêiner de validação do SIGTAP (se houver popup) - PEID message-box e botão OK já no common_forms ou _handle_ciap_alert?
     # Vamos reutilizar o handler de alerta do atendimento por enquanto, pois o comportamento pode ser similar
@@ -108,6 +113,7 @@ class ProcedimentoForm(BasePage):
     #     except Exception as e:
     #         logger.error(f"Erro ao preencher e selecionar Código do SIGTAP '{sigtap_code}': {e}", exc_info=True)
     #         raise AutomationError(f"Falha ao preencher/selecionar Código do SIGTAP '{sigtap_code}'.") from e
+        
 
     async def fill_sigtap_code(self, iframe_frame: Locator, sigtap_code: str):
         logger.info(f"Preenchendo campo 'Código do SIGTAP' com: {sigtap_code}")
@@ -238,6 +244,35 @@ class ProcedimentoForm(BasePage):
         await asyncio.sleep(0.5)
         await self._safe_press(locator, 'Enter', step_description=f"{step_description} - Enter")
         await asyncio.sleep(2)
+
+    async def select_exame_do_pe_diabetico(self, iframe_frame: Locator):
+        """Seleciona o checkbox de 'Exame do pé diabético' na seção Procedimentos / Pequenas cirurgias"""
+        try:
+            logger.info(f"Selecionando checkbox: '{self._EXAME_PE_DIABETICO_TEXT}' na seção 'Procedimentos / Pequenas cirurgias'.")
+
+            # Aguarda o contêiner da seção ficar visível
+            container_locator = iframe_frame.locator(self._PEQUENAS_CIRURGIAS_CONTAINER_XPATH)
+            await container_locator.wait_for(state="visible", timeout=10000)
+            logger.debug("Contêiner 'Procedimentos / Pequenas cirurgias' visível. Buscando labels...")
+
+            # Localiza todos os labels visíveis dentro da seção
+            all_labels = container_locator.locator("label.x-form-cb-label")
+            label_count = await all_labels.count()
+
+            for i in range(label_count):
+                label = all_labels.nth(i)
+                label_text = (await label.inner_text()).strip().lower()
+                if "exame do pé diabético" in label_text or "exame do pe diabetico" in label_text:
+                    logger.debug(f"Label encontrado: '{label_text}'. Clicando...")
+                    await self._safe_click(label, f"Label Checkbox Exame: {label_text}")
+                    return
+
+            # Se nenhum label for encontrado
+            raise AutomationError(f"'{self._EXAME_PE_DIABETICO_TEXT}' não encontrado na lista.")
+
+        except Exception as e:
+            logger.error(f"Erro durante seleção do checkbox '{self._EXAME_PE_DIABETICO_TEXT}': {e}", exc_info=True)
+            raise
 
 
 

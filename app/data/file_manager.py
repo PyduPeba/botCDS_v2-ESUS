@@ -25,6 +25,12 @@ class FileManager:
         self.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
         self.PROCESSED_REGISTRY.parent.mkdir(parents=True, exist_ok=True) # Garante a pasta do registro
 
+    def _is_file_processed(self, filename: str) -> bool:
+        """Verifica se um arquivo (pelo nome) já está registrado como processado."""
+        processed_files = self._load_processed_registry()
+        return filename in processed_files
+
+
     def _load_processed_registry(self):
         """Carrega a lista de arquivos já processados."""
         if not self.PROCESSED_REGISTRY.exists():
