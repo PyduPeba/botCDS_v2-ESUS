@@ -16,6 +16,9 @@ error_screenshots/*
 resources/config/*
 resources/data_input/*
 video/*
+icon.ico
+*ico
+docs_wiki.md
 
 # Distribution / packaging
 
