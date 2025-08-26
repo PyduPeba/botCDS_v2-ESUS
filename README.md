@@ -72,7 +72,7 @@ dist/main.exe
 
 # botcds.spec
 # Execute com: pyinstaller botcds.spec
-
+```bash
 from PyInstaller.utils.hooks import collect_submodules
 hidden_imports = collect_submodules('app')
 
@@ -121,7 +121,7 @@ coll = COLLECT(
     upx_exclude=[],
     name='botCDS'
 )
-
+```
 
 ## 🧩 Adicionando novas tarefas? Veja a Wiki
 
