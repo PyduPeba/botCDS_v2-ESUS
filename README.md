@@ -70,6 +70,59 @@ dist/main.exe
 - No GitHub, clique em `Releases > Draft new release`
 - Faça o upload do `.exe`
 
+# botcds.spec
+# Execute com: pyinstaller botcds.spec
+
+from PyInstaller.utils.hooks import collect_submodules
+hidden_imports = collect_submodules('app')
+
+block_cipher = None
+
+a = Analysis(
+    ['app/ui/main_window.py'],  # arquivo principal (ajuste se necessário)
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('app/assets/*', 'assets'),  # Inclui assets (ícones, imagens)
+        ('config/*.json', 'config'), # Configurações externas
+    ],
+    hiddenimports=hidden_imports,
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='botCDS',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,  # Defina como False para esconder o terminal
+    icon='app/assets/icon.ico',  # ✅ Ícone do executável
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='botCDS'
+)
+
+
 ## 🧩 Adicionando novas tarefas? Veja a Wiki
 
 ## 📄 Licença
