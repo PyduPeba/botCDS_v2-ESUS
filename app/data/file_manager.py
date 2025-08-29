@@ -83,7 +83,7 @@ class FileManager:
             return None
         try:
             # Adiciona dtype={1: str} para garantir que o CPF seja lido como string
-            df = pd.read_csv(file_path, sep=';', encoding='ISO-8859-1', header=None, dtype={1: str})
+            df = pd.read_csv(file_path, sep=';', encoding='ISO-8859-1', header=None, dtype=str)
             logger.info(f"Arquivo de dados carregado com sucesso: {file_path.name}")
             return df
         except FileNotFoundError:

@@ -18,6 +18,7 @@ resources/data_input/*
 video/*
 icon.ico
 *ico
+guiLayoutNew.py
 
 # Distribution / packaging
 

@@ -1,4 +1,4 @@
-# Arquivo: app/automation/pages/main_menu.py (CORRIGIDO 54)
+# Arquivo: app/automation/pages/main_menu.py (VERSÃO v1c - Correção Rota ACS)
 import asyncio
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
@@ -20,7 +20,8 @@ class MainMenu(BasePage):
     _EXPAND_MENU_BUTTON_XPATH = '/html/body/div[1]/div/div[3]/div[1]/div/div/div/span/button/span' # Exemplo do seu código
     _CDS_MENU_ITEM_SELECTOR = '[data-cy="SideMenu.CDS"]'
     _ATENDIMENTO_INDIVIDUAL_MENU_ITEM_SELECTOR = '[data-cy="SideMenu.Atendimento individual"]'
-    _PROCEDIMENTOS_MENU_ITEM_SELECTOR = '[data-cy="SideMenu.Procedimentos"]' # Exemplo
+    _PROCEDIMENTOS_MENU_ITEM_SELECTOR = '[data-cy="SideMenu.Procedimentos"]'
+    _ACS_MENU_VISITA = '[data-cy="SideMenu.Visita domiciliar e territorial"]' # Menu ACS - Visita Domiciliar e Territorial
 
     _MENU_LATERAL_CONTAINER_SELECTOR = 'nav.css-1csmvn1'
     # Seletor genérico para o iframe principal que contém os formulários
@@ -188,30 +189,6 @@ class MainMenu(BasePage):
             await self._handler.handle_error(e, step_description="Navegação para formulário de Procedimentos (Menu Lateral).")
             raise AutomationError(f"Navegação inicial para a tela da ficha (Procedimentos) falhou (menu lateral inacessível): {e}") from e
 
-
-        # # --- Estratégia Alternativa: Clique direto no elemento que abre o menu ---
-        # if not menu_navigation_successful:
-        #     logger.debug("Tentando estratégia alternativa (clique direto no elemento que abre o menu - Procedimentos)...")
-        #     try:
-        #         click_alternative_locator = self._page.locator(self._HOVER_ELEMENT_SELECTOR)
-        #         await click_alternative_locator.wait_for(state="visible", timeout=10000)
-        #         await self._safe_click(click_alternative_locator, "Elemento que abre menu (alternativa clique Procedimentos)")
-        #         menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
-        #         await menu_container_locator.wait_for(state="visible", timeout=5000)
-        #         await asyncio.sleep(0.5)
-        #         logger.debug("Menu lateral container visível (alternativa Procedimentos).")
-
-        #         menu_navigation_successful = await self._perform_menu_navigation_steps(
-        #             self._PROCEDIMENTOS_MENU_ITEM_SELECTOR,
-        #             "Item Menu Lateral Procedimentos (após CDS alternativa)"
-        #         )
-        #         if menu_navigation_successful:
-        #              logger.debug("Navegação do menu lateral (estratégia alternativa) bem-sucedida (Procedimentos).")
-
-        #     except Exception as e:
-        #          logger.error(f"Estratégia alternativa para abrir menu também falhou (Procedimentos): {e}.")
-
-
         # --- FLUXO PÓS-NAVEGAÇÃO DE MENU LATERAL BEM-SUCEDIDA ---
         if menu_navigation_successful:
              # 1. Tentar fechar o menu lateral (clicando no centro da tela)
@@ -312,6 +289,43 @@ class MainMenu(BasePage):
     #         # Os erros específicos já foram logados nos excepts das estratégias.
     #         raise AutomationError("Navegação inicial para a tela da ficha falhou (menu lateral inacessível).")
 
+    # (NOVO) Função para navegar ao menu de Visita Domiciliar do ACS
+    async def navigate_to_acs_visita_domiciliar(self) -> Locator:
+        """
+        Navega para a seção de Visita Domiciliar e Territorial do ACS.
+        Retorna o FrameLocator do iframe principal.
+        """
+        logger.info("Iniciando navegação para formulário de Visita Domiciliar do ACS.")
+        menu_navigation_successful = False
+
+        try:
+            menu_container_locator = self._page.locator(self._MENU_LATERAL_CONTAINER_SELECTOR)
+            await menu_container_locator.wait_for(state="visible", timeout=10000)
+            logger.debug("Contêiner do menu lateral visível. Clicando nos itens do ACS...")
+
+            # Usa o seletor do menu ACS
+            menu_navigation_successful = await self._perform_menu_navigation_steps(
+                self._ACS_MENU_VISITA,
+                "Item Menu ACS Visita Domiciliar (após CDS)"
+            )
+            if menu_navigation_successful:
+                logger.debug("Navegação do menu lateral para Visita Domiciliar bem-sucedida.")
+
+        except Exception as e:
+            logger.error(f"Falha na navegação do menu lateral para Visita Domiciliar do ACS: {e}.")
+            await self._handler.handle_error(e, step_description="Navegação para formulário de Visita Domiciliar (Menu Lateral).")
+            raise AutomationError(f"Navegação inicial para a ficha de Visita Domiciliar falhou (menu lateral inacessível): {e}") from e
+
+        if menu_navigation_successful:
+            logger.debug("Navegação do menu lateral concluída. Fechando menu clicando no centro.")
+            await self._click_center_of_page(step_description="Fechar menu lateral (ACS)")
+            await asyncio.sleep(0.5)
+
+            iframe_frame = await self._safe_switch_to_iframe(self._ESUS_IFRAME_SELECTOR, "Iframe Visita Domiciliar (após navegação)")
+            logger.info("Navegação para Visita Domiciliar (formulário) concluída.")
+            return iframe_frame
+        else:
+            raise AutomationError("Navegação inicial para a ficha de Visita Domiciliar falhou (menu lateral inacessível).")
 
     
     async def click_add_button_in_iframe(self, iframe_frame: Locator):

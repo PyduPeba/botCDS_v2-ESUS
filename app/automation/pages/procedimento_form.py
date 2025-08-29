@@ -57,62 +57,6 @@ class ProcedimentoForm(BasePage):
         super().__init__(page, error_handler)
         # Reutiliza o método de tratamento de alerta que pode ser similar
 
-    #Versão anterior do método fill_sigtap_code, mantida para referência
-    # async def fill_sigtap_code(self, iframe_frame: Locator, sigtap_code: str):
-    #     """Preenche o campo Código do SIGTAP e seleciona o código (Aferição)."""
-    #     logger.info(f"Preenchendo campo 'Código do SIGTAP' com: {sigtap_code}")
-    #     sigtap_field_locator = iframe_frame.locator(self._SIGTAP_FIELD_XPATH)
-    #     await self._safe_fill(sigtap_field_locator, sigtap_code, step_description="Campo Código do SIGTAP")
-    #     await asyncio.sleep(2) # Espera para a lista de busca aparecer
-
-    #     # Clica no item da lista de busca que corresponde ao código (texto exato)
-    #     # Verifique onde a lista aparece (iframe ou documento principal)
-    #     search_item_locator = self._page.locator(self._SEARCH_ITEM_TEXT_SELECTOR, has_text=sigtap_code).first
-    #     # Se aparece DENTRO do iframe, use iframe_frame.locator(...)
-
-    #     await self._safe_click(search_item_locator, step_description=f"Item '{sigtap_code}' na lista de busca do SIGTAP")
-    #     await asyncio.sleep(1) # Pequena pausa após selecionar
-
-    #     # Lida com possíveis popups de alerta após selecionar o SIGTAP (reutiliza lógica do CIAP)
-    #     await self._handle_ciap_alert(self._page) # Alerta pode aparecer no contexto principal (_page)
-    # async def fill_sigtap_code(self, iframe_frame: Locator, sigtap_code: str):
-    #     logger.info(f"Preenchendo campo 'Código do SIGTAP' com: {sigtap_code}")
-    #     sigtap_field_locator = iframe_frame.locator(self._SIGTAP_FIELD_XPATH)
-
-    #     # XPath mais tolerante
-    #     suggestion_xpath = f"//div[contains(@class, 'x-combo-list-inner')]//b[text()='{sigtap_code}']"
-    #     suggestion_locator = iframe_frame.locator(suggestion_xpath)
-
-    #     try:
-    #         # Preencher o código
-    #         await self._safe_fill_simule(sigtap_field_locator, sigtap_code, step_description="Campo Código do SIGTAP - Preencher")
-    #         logger.debug("Aguardando a sugestão com o código aparecer na lista...")
-
-    #         # Esperar a sugestão com o código
-    #         await suggestion_locator.wait_for(state="visible", timeout=7000)
-
-    #         # Selecionar com ↓ + Enter
-    #         logger.debug("Sugestão visível. Selecionando com seta para baixo e enter...")
-    #         await self._safe_press(sigtap_field_locator, 'ArrowDown', step_description="Selecionar sugestão SIGTAP - ArrowDown")
-    #         await asyncio.sleep(0.2)
-    #         await self._safe_press(sigtap_field_locator, 'Enter', step_description="Selecionar sugestão SIGTAP - Enter")
-    #         await asyncio.sleep(1.5)
-
-    #         # Trata alertas, se houver
-    #         popup_status = await self._handle_ciap_alert(self._page)
-    #         if popup_status == "handled":
-    #             logger.debug("Popup tratado com sucesso.")
-    #         elif popup_status == "error":
-    #             logger.warning("Erro ao tratar popup de alerta SIGTAP.")
-
-    #     except TimeoutError as e:
-    #         html_dump = await iframe_frame.content()
-    #         logger.error(f"Erro ao localizar sugestão para SIGTAP '{sigtap_code}'. DOM parcial:\n{html_dump[:3000]}")
-    #         raise AutomationError(f"Timeout ao localizar sugestão do SIGTAP '{sigtap_code}'.") from e
-
-    #     except Exception as e:
-    #         logger.error(f"Erro ao preencher e selecionar Código do SIGTAP '{sigtap_code}': {e}", exc_info=True)
-    #         raise AutomationError(f"Falha ao preencher/selecionar Código do SIGTAP '{sigtap_code}'.") from e
         
 
     async def fill_sigtap_code(self, iframe_frame: Locator, sigtap_code: str):

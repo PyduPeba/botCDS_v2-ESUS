@@ -1,10 +1,10 @@
 import sys
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QLineEdit, QPushButton, QCheckBox, QMessageBox, QFrame, QGridLayout, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont, QColor, QPalette
+from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QFont, QColor, QPalette
 
 class RoboDIGTAppV5(QWidget):
     def __init__(self):
@@ -31,21 +31,21 @@ class RoboDIGTAppV5(QWidget):
         header_layout = QHBoxLayout()
         title_label = QLabel('Robo DIGT <span style="font-weight:bold; color:#4C72E0;">v5.0</span>')
         title_label.setFont(QFont('Inter', 32, QFont.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(title_label)
         main_layout.addLayout(header_layout)
 
         # Subtítulo discreto
         subtitle_label = QLabel('<span style="font-size:15px; color:#6B7280;">Automação inteligente e eficiente com Playwright/Asyncio</span>')
         subtitle_label.setFont(QFont('Inter', 11))
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(subtitle_label)
 
         # --- Área de Conteúdo em Grade (Cards) ---
         content_grid_layout = QGridLayout()
         content_grid_layout.setHorizontalSpacing(30)
         content_grid_layout.setVerticalSpacing(30)
-        content_grid_layout.setAlignment(Qt.AlignmentFlag.AlignCenter) # Centraliza a grade
+        content_grid_layout.setAlignment(Qt.AlignCenter) # Centraliza a grade
 
         # --- Card de Seleção de Tarefa ---
         task_card = QFrame()
@@ -59,11 +59,11 @@ class RoboDIGTAppV5(QWidget):
         """)
         task_layout = QVBoxLayout(task_card)
         task_layout.setSpacing(18)
-        task_layout.addWidget(QLabel('<span style="font-size:20px; font-weight:bold; color:#333;">Definir Tarefa</span>'), alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        task_layout.addWidget(QLabel('<span style="font-size:20px; font-weight:bold; color:#333;">Definir Tarefa</span>'), alignment=Qt.AlignTop | Qt.AlignLeft)
 
         task_label = QLabel('Selecione a tarefa a ser executada:')
         task_label.setFont(QFont('Inter', 13))
-        task_layout.addWidget(task_label, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        task_layout.addWidget(task_label, alignment=Qt.AlignTop | Qt.AlignLeft)
 
         self.task_combo = QComboBox()
         self.task_combo.addItems(['Atendimento Hipertenso', 'Agendamento Consultas', 'Relatórios Diários', 'Processamento de Dados'])
@@ -127,7 +127,7 @@ class RoboDIGTAppV5(QWidget):
         date_input_row_layout.addWidget(self.date_input)
 
         save_data_button = QPushButton('Salvar Data')
-        save_data_button.setFont(QFont('Inter', 12, QFont.Weight.DemiBold))
+        save_data_button.setFont(QFont('Inter', 12, QFont.DemiBold))
         save_data_button.setStyleSheet("""
             QPushButton {
                 background-color: #28A745; /* Verde Bootstrap */
@@ -163,7 +163,7 @@ class RoboDIGTAppV5(QWidget):
         """)
         actions_layout = QVBoxLayout(actions_card)
         actions_layout.setSpacing(25)
-        actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        actions_layout.setAlignment(Qt.AlignCenter)
 
         self.delete_csv_checkbox = QCheckBox('Apagar dados.csv após conclusão?')
         self.delete_csv_checkbox.setFont(QFont('Inter', 13))
@@ -185,10 +185,10 @@ class RoboDIGTAppV5(QWidget):
                 image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0ZGRkZGRiI+PHBhdGggZD0iTTEwLjQ3IDE2Ljc4Yy0uMzkuMzktMS4wMi4zOS0xLjQxIDBsLTMuNzUtMy43NWMtLjM5LS4zOS0uMzktMS4wMiAwLTEuNDFsMS40MS0xLjQxYy4zOS0uMzkgMS4wMi0uMzkgMS40MSAwTDEwLjQ3IDEyLjU4bDUuOTYtNS45NmMuMzktLjM5IDEuMDItLjM5IDEuNDEgMGwxLjQxIDEuNDFjLjM5LjM5LjM5IDEuMDIgMCAxLjQxbC03LjM3IDcuMzdjLS4zOS4zOS0xLjAyLjM5LTEuNDEgMHoiLz48L3N2Z24+);
             }
         """)
-        actions_layout.addWidget(self.delete_csv_checkbox, alignment=Qt.AlignmentFlag.AlignCenter)
+        actions_layout.addWidget(self.delete_csv_checkbox, alignment=Qt.AlignCenter)
 
         start_automation_button = QPushButton('Iniciar Automação')
-        start_automation_button.setFont(QFont('Inter', 18, QFont.Weight.Bold))
+        start_automation_button.setFont(QFont('Inter', 18, QFont.Bold))
         start_automation_button.setFixedSize(360, 75)
         start_automation_button.setStyleSheet("""
             QPushButton {
@@ -206,10 +206,10 @@ class RoboDIGTAppV5(QWidget):
             }
         """)
         start_automation_button.clicked.connect(self.start_automation)
-        actions_layout.addWidget(start_automation_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        actions_layout.addWidget(start_automation_button, alignment=Qt.AlignCenter)
 
         exit_button = QPushButton('Exit')
-        exit_button.setFont(QFont('Inter', 14, QFont.Weight.DemiBold))
+        exit_button.setFont(QFont('Inter', 14, QFont.DemiBold))
         exit_button.setFixedSize(220, 55)
         exit_button.setStyleSheet("""
             QPushButton {
@@ -227,7 +227,7 @@ class RoboDIGTAppV5(QWidget):
             }
         """)
         exit_button.clicked.connect(self.exit_app)
-        actions_layout.addWidget(exit_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        actions_layout.addWidget(exit_button, alignment=Qt.AlignCenter)
         actions_layout.addStretch()
 
         content_grid_layout.addWidget(actions_card, 1, 0, 1, 2) # Linha 1, Coluna 0, Ocupa 1 linha, 2 colunas
@@ -236,7 +236,7 @@ class RoboDIGTAppV5(QWidget):
 
         # --- Rodapé Minimalista ---
         footer_layout = QHBoxLayout()
-        footer_layout.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
+        footer_layout.setAlignment(Qt.AlignBottom | Qt.AlignLeft)
         footer_layout.setContentsMargins(0, 30, 0, 0) # Margem superior para separar do conteúdo
 
         copyright_label = QLabel('Copyright DIGT and Клех')
@@ -263,7 +263,7 @@ class RoboDIGTAppV5(QWidget):
         msg_box = QMessageBox()
         msg_box.setWindowTitle(title)
         msg_box.setText(message)
-        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setIcon(QMessageBox.Information)
         msg_box.setFont(QFont('Inter', 11))
         msg_box.setStyleSheet("""
             QMessageBox {

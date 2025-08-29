@@ -167,6 +167,13 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         # Adiciona o layout horizontal de data ao layout principal
         self.main_layout.addLayout(date_layout)
 
+        # --- CHECKBOX DE LOGIN MANUAL (NOVO) ---
+        self.checkbox_manual_login = QCheckBox("Login Manual para outros perfis (ACS/Médico)", self) # <-- NOVO
+        self.checkbox_manual_login.setStyleSheet("font-size: 10pt; font-style: italic; color: #333;") # <-- NOVO
+        self.checkbox_manual_login.setToolTip("Marque esta opção se precisar selecionar manualmente o perfil/equipe após o login (ex: ACS, Médico). O robô fará uma pausa de 5 segundos.") # <-- NOVO
+        self.main_layout.addWidget(self.checkbox_manual_login) # <-- NOVO
+        # --- FIM DO NOVO BLOCO ---
+
         # --- CheckBox para apagar arquivo ---
         self.checkboxDeleteFile = QCheckBox("Apagar dados.csv após conclusão?", self)
         self.checkboxDeleteFile.setStyleSheet("font-size: 10pt;")
@@ -418,6 +425,9 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
              logger.error(f"Arquivo de configuração de login incompleto ou faltando: {config_loader.CONFIG_FILE}")
              return
 
+        # --- OBTÉM O ESTADO DO CHECKBOX DE LOGIN MANUAL (MODIFICADO) ---
+        is_manual_login = self.checkbox_manual_login.isChecked() # <-- NOVO
+        logger.info(f"Modo de Login Manual: {'Ativado' if is_manual_login else 'Desativado'}") # <-- NOVO
 
         # Se tudo estiver OK, iniciar a thread
         logger.info(f"Iniciando automação para a tarefa '{selected_task_name}'...")
@@ -426,7 +436,7 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         # Cria a thread de trabalho
         self._automation_thread = QThread()
         # Cria o objeto Worker e o move para a thread
-        self._automation_worker = Worker(selected_task_name)
+        self._automation_worker = Worker(selected_task_name, manual_login=is_manual_login)
         self._automation_worker.moveToThread(self._automation_thread)
 
         # Conecta sinais do Worker aos slots na MainWindow

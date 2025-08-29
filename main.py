@@ -8,7 +8,7 @@ from app.gui.main_window import MainWindow
 # Importa a configuração do aplicativo para garantir que seja carregada
 from app.core.app_config import AppConfig
 
-# Importa o logger para garantir que a configuração inicial seja aplicada
+# Importa o logger para garantir que a configuração inicial seja aplicada v
 from app.core.logger import logger
 
 if __name__ == '__main__':
@@ -32,5 +32,5 @@ if __name__ == '__main__':
     # também deve encerrar a aplicação.
     # app.aboutToQuit.connect(main_window.exit_app) # Descomentado se exit_app não chamar QApplication.quit()
 
-    # Inicia o loop de eventos do PyQt
-    sys.exit(app.exec_())
+# Inicia o loop de eventos do PyQt
+sys.exit(app.exec_())

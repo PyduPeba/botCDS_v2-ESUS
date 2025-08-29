@@ -1,4 +1,4 @@
-# Arquivo: app/automation/tasks/base_task.py (Versão funcional até 25.08)
+# Arquivo: app/automation/tasks/base_task.py (VERSÃO v1g - Integrando Gênero ACS)
 from abc import ABC, abstractmethod # Usamos ABC para criar classes abstratas
 from playwright.async_api import Page, Locator
 import pandas as pd
@@ -15,6 +15,7 @@ from app.automation.pages.main_menu import MainMenu
 from app.automation.pages.common_forms import CommonForms
 from app.automation.pages.atendimento_form import AtendimentoForm
 from app.automation.pages.procedimento_form import ProcedimentoForm
+from app.automation.pages.acs_form import AcsForm
 
 # Importar FileManager e DateSequencer (no topo)
 from app.data.file_manager import FileManager
@@ -30,13 +31,15 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
     Gerencia o loop pelos dados e o tratamento de exceções de controle.
     Controla o fluxo de processamento de múltiplos arquivos de dados.
     """
-    def __init__(self, page: Page, error_handler: AutomationErrorHandler):
+    
+    def __init__(self, page: Page, error_handler: AutomationErrorHandler, manual_login: bool):
         # Contadores totais da sessão (acumulados em todos os arquivos)
         self._processed_count_total = 0
         self._skipped_count_total = 0
 
         self._page = page # Instância da página Playwright
         self._handler = error_handler # Instância do gerenciador de erros
+        self._manual_login = manual_login # Armazena o parâmetro de login manual
         
         # Instâncias das classes de páginas (instanciadas no __init__ da Task)
         self._login_page = LoginPage(self._page, self._handler)
@@ -44,10 +47,23 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
         self._common_forms = CommonForms(self._page, self._handler)
         self._atendimento_form = AtendimentoForm(self._page, self._handler)
         self._procedimento_form = ProcedimentoForm(self._page, self._handler)
-
+        self._acs_form = AcsForm(self._page, self._handler)
         # Variável para guardar a instância do iframe (será definida após navegação inicial)
         self._current_iframe_frame: Locator = None
 
+    async def _perform_pre_navigation_steps(self):
+        """
+        Gancho para seleção de perfil. A implementação padrão tenta selecionar 'ENFERMEIRO'.
+        Tarefas específicas (como a do ACS) podem sobrescrever este método.
+        """
+        logger.info("Executando passo de pré-navegação padrão: Tentando selecionar perfil 'ENFERMEIRO'.")
+        profile_selected = await self._login_page.select_profile_and_unidade_optional(
+            profile_name_to_select="ENFERMEIRO"
+        )
+        if not profile_selected:
+            logger.warning("Não foi possível selecionar o perfil 'ENFERMEIRO' automaticamente. A automação continuará com o perfil que já estiver carregado.")
+        else:
+            logger.info("Perfil 'ENFERMEIRO' selecionado com sucesso.")
 
     async def run(self):
         """
@@ -75,7 +91,18 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
             #     logger.warning("Perfil/Unidade de Enfermeiro NÃO selecionado. A automação pode falhar nos próximos passos.")
 
 
-            # --- Passo 2: Navegação para a tela da Ficha (Atendimento ou Procedimento) ---
+            # --- Passo 2: Lógica Condicional de Login Manual vs. Automático ---
+            if self._manual_login: # <-- NOVO BLOCO LÓGICO
+                logger.warning("LOGIN MANUAL ATIVADO. Pausando por 5 segundos para seleção de perfil/equipe.")
+                logger.warning("Por favor, selecione seu perfil e equipe na tela do e-SUS AGORA.")
+                await asyncio.sleep(5) # Pausa de 10 segundos
+                logger.info("Pausa concluída. Continuando com a automação...")
+            else:
+                # Se não for manual, executa a seleção automática de perfil
+                await self._perform_pre_navigation_steps()
+            # --- FIM DA NOVA LÓGICA ---
+
+            # --- Passo 2a. Navegação para a tela da Ficha (Atendimento ou Procedimento) ---
             # _navigate_to_task_area retorna o FrameLocator do iframe principal APÓS navegar no menu.
             # Esta navegação acontece UMA VEZ POR SESSÃO (não por arquivo).
             self._current_iframe_frame = await self._navigate_to_task_area()
@@ -373,3 +400,40 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
 
          # Pausa opcional após preencher campos comuns
          # await asyncio.sleep(1)
+    # --- NOVA FUNÇÃO PARA PREENCHER DADOS DO ACS ---
+    async def _fill_common_patient_acs(self, iframe_frame: Locator, row_data: list):
+        """Preenche campos comuns do paciente para a ficha de Visita Domiciliar do ACS."""
+        logger.debug("Preenchendo dados comuns do paciente (ACS)...")
+        # Assume que as colunas 0, 1, 2, 3, 4 e 9 do CSV são:
+        # 0: Periodo (str)
+        # 1: CPF/CNS (str)
+        # 2: Data Nasc (str)
+        # 3: Sexo (int: 1=Masc, 2=Fem, 3=Indet)
+        # 4: Microárea (str or int)
+        # 8: Tipo de imóvel (código, ex: "01")
+
+        # Reutiliza a lógica já existente para os campos compartilhados
+        if len(row_data) > 0:
+            await self._common_forms.select_period(iframe_frame, str(row_data[0]))
+        if len(row_data) > 1:
+            await self._common_forms.fill_cpf_cns(iframe_frame, str(row_data[1]))
+        if len(row_data) > 2:
+            await self._common_forms.fill_date_of_birth(iframe_frame, str(row_data[2]))
+        if len(row_data) > 3:
+            try:
+                gender_int = int(row_data[3])
+                await self._acs_form.select_gender_acs(iframe_frame, gender_int) # Teste clica sexo ACS
+            except (ValueError, TypeError):
+                logger.warning(f"Valor inválido para Gênero na linha: {row_data[3]}. Pulando seleção.")
+
+        # --- ALTERAÇÃO: Chamando os novos métodos do acs_form.py ---
+        if len(row_data) > 4:
+            # Chama o método que criamos em acs_form.py
+            await self._acs_form.fill_micro_area(iframe_frame, str(row_data[4]))
+        if len(row_data) > 8:
+            # Chama o método de seleção, passando o código do CSV e o texto esperado.
+            # Assumindo que o código '01' sempre corresponde a 'DOMICÍLIO'
+            imovel_code = str(row_data[8])
+            imovel_description = "DOMICÍLIO" # Pode ser adaptado se houver outros tipos
+            await self._acs_form.select_tipo_imovel(iframe_frame, imovel_code, imovel_description)
+    # --- FIM DA NOVA FUNÇÃO ---
