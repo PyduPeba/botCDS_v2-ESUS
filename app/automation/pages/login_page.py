@@ -1,4 +1,4 @@
-# Arquivo: app/automation/pages/login_page.py (CORRIGIDO 50 - PARTE 1)
+# Arquivo: app/automation/pages/login_page.py (VERSÃO v3 - Lógica de Perfil Centralizada)
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
 from app.core.logger import logger
@@ -33,6 +33,19 @@ class LoginPage(BasePage):
     # Exemplo: div:has-text("Enfermeiro da estratégia de saúde da família")
     _ENFERMEIRO_CARD_SELECTOR = '[data-cy="Acesso.card"]:has-text("Enfermeiro da estratégia de saúde da família")' # Exemplo
     _UNIDADE_CARD_SELECTOR = '[data-cy="Acesso.card"]' # Seletor mais genérico para cartões de acesso, precisaremos escolher o correto
+
+    # --- SELETORES PARA AMBAS AS TELAS DE PERFIL ---
+    # Tela 1: Seleção por Cartões (NOVO)
+    _PROFILE_CARD_SELECTOR_TEMPLATE = '[data-cy="Acesso.card"]:has-text("{}")'
+    _UNIT_CARD_SELECTOR = '[data-cy="Acesso.card"]' # Pega o primeiro card de unidade
+
+    # Tela 2: Seleção por Dropdowns (Antigo)
+    _PROFILE_DROPDOWN_SELECTOR = 'div[peid="ocupacao-combo"]'
+    _PROFILE_LIST_ITEM_SELECTOR_TEMPLATE = 'li.x-boundlist-item:has-text("{}")'
+    _UNIDADE_DROPDOWN_SELECTOR = 'div[peid="unidade-saude-combo"]'
+    _UNIDADE_LIST_ITEM_SELECTOR = 'li.x-boundlist-item'
+    _CONFIRM_PROFILE_BUTTON_SELECTOR = 'button:has-text("Confirmar")'
+    # --- FIM DOS SELETORES ---
 
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         super().__init__(page, error_handler) # Inicializa a BasePage
@@ -95,37 +108,48 @@ class LoginPage(BasePage):
             logger.debug("Popup 'Continuar' pós-login não encontrado ou erro ao clicar. Continuando.")
 
 
-        logger.info("Login concluído. Aguardando seleção de perfil/unidade.")
-        # ** CHAMA O NOVO MÉTODO PARA SELEÇÃO OPCIONAL **
-        profile_selected = await self.select_profile_and_unidade_optional()
+        # A lógica de seleção de perfil agora é responsabilidade exclusiva da BaseTask.
+        logger.info("Login concluído. A tarefa continuará com a seleção de perfil, se necessário.")
         
-    async def select_profile_and_unidade_optional(self) -> bool:
+    async def select_profile_and_unidade_optional(self, profile_name_to_select: str = "Enfermeiro") -> bool:
         """
-        Tenta selecionar o perfil de Enfermeiro e a primeira unidade disponível.
-        Se o perfil não for encontrado, loga um aviso e retorna False.
-        Retorna True se ambos foram selecionados, False caso contrário.
+        Função unificada e robusta para selecionar perfil e unidade na tela de cartões.
+        Aceita o nome do perfil como argumento para ser flexível.
         """
-        logger.info("Tentando selecionar perfil de Enfermeiro...")
-        profile_selected = False
+        logger.info(f"Tentando selecionar o perfil via card: '{profile_name_to_select}'...")
+
+        # Mapeia o nome curto para o texto completo no card
+        profile_text_map = {
+            "Enfermeiro": "Enfermeiro da estratégia de saúde da família",
+            "AGENTE COMUNITARIO DE SAUDE": "Agente comunitário de saúde"
+        }
+        full_profile_text = profile_text_map.get(profile_name_to_select, profile_name_to_select)
+
         try:
-            profile_locator = self._page.locator(self._ENFERMEIRO_CARD_SELECTOR)
-            await profile_locator.wait_for(state="visible", timeout=5000) # Espera no máximo 5 segundos
-            await self._safe_click(profile_locator, "Cartão 'Enfermeiro da estratégia de saúde da família'")
-            logger.info("Perfil de Enfermeiro selecionado com sucesso.")
-            await self._page.wait_for_load_state('domcontentloaded', timeout=5000)
-            profile_selected = True
+            profile_locator = self._page.locator(self._PROFILE_CARD_SELECTOR_TEMPLATE.format(full_profile_text))
+            await profile_locator.wait_for(state="visible", timeout=5000)
+            
+            await self._safe_click(profile_locator, f"Cartão '{full_profile_text}'")
+            logger.info(f"Perfil '{full_profile_text}' selecionado com sucesso.")
 
-            logger.info("Selecionando unidade (primeira disponível)...")
-            unit_cards_locator = self._page.locator(self._UNIDADE_CARD_SELECTOR)
-            await unit_cards_locator.first.wait_for(state="visible", timeout=5000) # Espera a primeira unidade visível
-            await self._safe_click(unit_cards_locator.first, step_description="Primeiro cartão de Unidade disponível")
-            await self._page.wait_for_load_state('domcontentloaded', timeout=20000)
-            logger.info("Unidade selecionada.")
-            return True # Perfil e unidade selecionados
+            # Espera a navegação para a tela de unidades ser concluída
+            logger.info("Aguardando a tela de seleção de unidade carregar...")
+            await self._page.wait_for_load_state("networkidle", timeout=2000)
 
+            logger.info("Selecionando a primeira unidade disponível...")
+            unit_card_locator = self._page.locator(self._UNIT_CARD_SELECTOR).first
+            await self._safe_click(unit_card_locator, "Primeiro cartão de Unidade disponível")
+            
+            await self._page.wait_for_load_state("networkidle", timeout=20000)
+            logger.info("Unidade selecionada com sucesso.")
+            return True
+
+        except TimeoutError:
+            logger.warning(f"Tela de seleção de perfil por card não encontrada para '{full_profile_text}'. A automação continuará.")
+            return False
         except Exception as e:
-            logger.warning(f"Falha ao selecionar perfil/unidade (passando): {e}")
-            return False # Falha na seleção
+            logger.error(f"Erro inesperado durante a seleção de perfil/unidade: {e}", exc_info=True)
+            return False
 
     async def select_enfermeiro_and_unidade(self):
         """Seleciona o perfil de enfermeiro e clica na primeira unidade disponível."""

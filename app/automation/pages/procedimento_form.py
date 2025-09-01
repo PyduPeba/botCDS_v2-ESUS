@@ -38,6 +38,7 @@ class ProcedimentoForm(BasePage):
     # ** NOVOS SELETORES PARA A SEÇÃO "Procedimentos / Pequenas cirurgias" **
     _EXAME_PE_DIABETICO_TEXT = "Exame do pé diabético"
     _PEQUENAS_CIRURGIAS_CONTAINER_XPATH = "//div[@peid='FichaProcedimentosChildForm.procedimentos']"
+    _EXAME_DE_COLO_UTERINO_TEXT = "Coleta de citopatológico de colo uterino"
 
 
     # _SIGTAP_SUGGESTION_ITEM_NAME_TEMPLATE = "{} - AFERIÇÃO DE PRESSÃO ARTERIAL"
@@ -216,6 +217,35 @@ class ProcedimentoForm(BasePage):
 
         except Exception as e:
             logger.error(f"Erro durante seleção do checkbox '{self._EXAME_PE_DIABETICO_TEXT}': {e}", exc_info=True)
+            raise
+
+    async def select_exame_do_colo_uterino(self, iframe_frame: Locator):
+        """Seleciona o checkbox de 'Coleta de citopatológico de colo uterino' na seção Procedimentos / Pequenas cirurgias"""
+        try:
+            logger.info(f"Selecionando checkbox: '{self._EXAME_DE_COLO_UTERINO_TEXT}' na seção 'Procedimentos / Pequenas cirurgias'.")
+
+            # Aguarda o contêiner da seção ficar visível
+            container_locator = iframe_frame.locator(self._PEQUENAS_CIRURGIAS_CONTAINER_XPATH)
+            await container_locator.wait_for(state="visible", timeout=10000)
+            logger.debug("Contêiner 'Procedimentos / Pequenas cirurgias' visível. Buscando labels...")
+
+            # Localiza todos os labels visíveis dentro da seção
+            all_labels = container_locator.locator("label.x-form-cb-label")
+            label_count = await all_labels.count()
+
+            for i in range(label_count):
+                label = all_labels.nth(i)
+                label_text = (await label.inner_text()).strip().lower()
+                if "coleta de citopatológico de colo uterino" in label_text or "coleta de citopatológico de colo uterino" in label_text:
+                    logger.debug(f"Label encontrado: '{label_text}'. Clicando...")
+                    await self._safe_click(label, f"Label Checkbox Exame: {label_text}")
+                    return
+
+            # Se nenhum label for encontrado
+            raise AutomationError(f"'{self._EXAME_DE_COLO_UTERINO_TEXT}' não encontrado na lista.")
+
+        except Exception as e:
+            logger.error(f"Erro durante seleção do checkbox '{self._EXAME_DE_COLO_UTERINO_TEXT}': {e}", exc_info=True)
             raise
 
 

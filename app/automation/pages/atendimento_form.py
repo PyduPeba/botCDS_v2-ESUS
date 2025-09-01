@@ -1,4 +1,4 @@
-# Arquivo: app/automation/pages/atendimento_form.py
+# Arquivo: app/automation/pages/atendimento_form.py (VERSÃO v1a - Seleção Exata)
 import asyncio
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
@@ -65,6 +65,16 @@ class AtendimentoForm(BasePage):
     _CONDUTA_FIXA_LABEL_SELECTOR = 'label:has-text("Retorno para consulta agendada")'
 
 
+    # --- NOVOS SELETORES PARA O BLOCO "OUTROS EXAMES" ---
+    _OUTROS_EXAMES_CONTAINER_SELECTOR = 'div[peid="FieldSetPanel.outrosexames(codigodosigtap)"]'
+    _OUTROS_EXAMES_INPUT_XPATH = '//div[@peid="FieldSetPanel.outrosexames(codigodosigtap)"]/following::input[1]'
+    _OUTROS_EXAMES_STATUS_CONTAINER_SELECTOR = 'div[peid="OutrosSiaForm.status"]'
+    _OUTROS_EXAMES_STATUS_S_LABEL_SELECTOR = 'label:has-text("S")'
+    _OUTROS_EXAMES_CONFIRM_BUTTON_SELECTOR = 'div[peid="OutrosSiaAtendimentoIndividualComponentFlexList.Confirmar"] button:has-text("Confirmar")'
+    _SIGTAP_SUGGESTION_ITEM_SELECTOR_TEMPLATE = "div.search-item:has-text('{}')"
+    # --- FIM DOS NOVOS SELETORES ---
+
+
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         super().__init__(page, error_handler)
 
@@ -85,6 +95,21 @@ class AtendimentoForm(BasePage):
             # _safe_click já chamou o handler e re-levantou.
             # Capturamos E re-levantamos como AutomationError.
             logger.error(f"Erro ao selecionar Tipo de Atendimento '{tipo_atendimento}': {e}")
+            raise AutomationError(f"Falha ao selecionar Tipo de Atendimento '{tipo_atendimento}' no iframe.") from e
+    
+    async def select_tipo_atendimento_fixo(self, iframe_frame: Locator, tipo_atendimento: str):
+        """Seleciona o Tipo de Atendimento clicando no label com o texto exato."""
+        logger.info(f"Selecionando Tipo de Atendimento: {tipo_atendimento}")
+
+        try:
+            label_locator = iframe_frame.get_by_text(tipo_atendimento, exact=True)
+
+            logger.debug(f"Tentando clicar no label exato para Tipo de Atendimento: {tipo_atendimento}")
+            await self._safe_click(label_locator, step_description=f"Label Rádio Tipo Atendimento: {tipo_atendimento}")
+            logger.debug(f"Label para Tipo de Atendimento '{tipo_atendimento}' clicado com sucesso.")
+
+        except Exception as e:
+            logger.error(f"Erro ao selecionar Tipo de Atendimento '{tipo_atendimento}': {e}", exc_info=True)
             raise AutomationError(f"Falha ao selecionar Tipo de Atendimento '{tipo_atendimento}' no iframe.") from e
 
     async def select_condicao_avaliada(self, iframe_frame: Locator, condicao: str):
@@ -279,5 +304,41 @@ class AtendimentoForm(BasePage):
          await asyncio.sleep(1) # Pequena pausa
 
 
-    # Adicione outros campos ou interações específicas dos formulários de Atendimento aqui
-    # (Ex: Campos de Aferição de Pressão, Peso, Altura, se houverem no formulário de atendimento)
+    # --- NOVA FUNÇÃO COMPLETA PARA O BLOCO SIGTAP ---
+    async def fill_outros_exames_sigtap(self, iframe_frame: Locator, sigtap_code: str):
+        """
+        Executa o fluxo completo para o bloco "Outros exames":
+        1. Digita o código SIGTAP e seleciona a sugestão.
+        2. Marca o status "S".
+        3. Clica no botão "Confirmar" do bloco.
+        """
+        logger.info(f"Preenchendo bloco 'Outros exames' com SIGTAP: {sigtap_code}")
+        try:
+            # 1. Encontrar o campo, digitar e selecionar a sugestão
+            sigtap_field_locator = iframe_frame.locator(self._OUTROS_EXAMES_INPUT_XPATH)
+            await self._safe_fill_simule(sigtap_field_locator, sigtap_code, "Campo SIGTAP (Outros Exames)")
+            
+            # Espera e clica na sugestão que aparece
+            suggestion_locator = iframe_frame.locator(self._SIGTAP_SUGGESTION_ITEM_SELECTOR_TEMPLATE.format(sigtap_code)).last
+            await self._safe_click(suggestion_locator, f"Sugestão SIGTAP: {sigtap_code}")
+            await asyncio.sleep(1)
+
+            # --- CORREÇÃO: Lógica de seleção do 'S' com escopo ---
+            # 2. Encontrar o contêiner de Status primeiro para garantir o escopo.
+            status_container_locator = iframe_frame.locator(self._OUTROS_EXAMES_STATUS_CONTAINER_SELECTOR)
+
+            # 3. Agora, procurar o label 'S' SOMENTE DENTRO deste contêiner.
+            status_s_locator = status_container_locator.locator(self._OUTROS_EXAMES_STATUS_S_LABEL_SELECTOR)
+            await self._safe_click(status_s_locator, "Status 'S' (dentro do container)")
+            await asyncio.sleep(0.5)
+            # --- FIM DA CORREÇÃO ---
+
+            # 3. Clicar no botão "Confirmar" do bloco
+            confirm_button_locator = iframe_frame.locator(self._OUTROS_EXAMES_CONFIRM_BUTTON_SELECTOR)
+            await self._safe_click(confirm_button_locator, "Botão Confirmar (Bloco Outros Exames)")
+
+            logger.info("Bloco 'Outros exames' preenchido e confirmado com sucesso.")
+
+        except Exception as e:
+            logger.error(f"Erro ao processar o bloco 'Outros exames' com SIGTAP {sigtap_code}: {e}", exc_info=True)
+            raise AutomationError(f"Falha ao preencher o bloco 'Outros exames' com SIGTAP {sigtap_code}.") from e

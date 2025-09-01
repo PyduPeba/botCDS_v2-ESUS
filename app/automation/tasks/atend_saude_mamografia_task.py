@@ -1,11 +1,11 @@
-# File: app/automation/tasks/atend_saude_repro_task.py (VERSÃO v2 - Refatorado)
+# File: app/automation/tasks/atend_saude_mamografia_task.py 
 import asyncio
 from playwright.async_api import Locator
 from app.automation.tasks.base_task import BaseTask
 from app.core.logger import logger
 # No need to import pandas here, already imported in BaseTask
 
-class AtendimentoSaudeReproTask(BaseTask):
+class AtendimentoMamografiaTask(BaseTask):
     """
     Automation task to register Individual Attendance for Reproductive Health.
     Includes selecting the condition and potentially filling an Outros SIA field.
@@ -41,9 +41,10 @@ class AtendimentoSaudeReproTask(BaseTask):
 
         tipo_atendimento = "Consulta agendada"
         condicao_avaliada_text = "Saúde sexual e reprodutiva" # Fixed text for this task
+        rastreamento_label = "Câncer de mama"
         conduta = row_data[7]
         
-        exame_sia_code = "0203010086" # Code or text for Citopatológico
+        exame_sia_code = "0204030188" # Code or text for Citopatológico
         status_sia = "S" # Status fixed for the SIA block
 
 
@@ -51,6 +52,9 @@ class AtendimentoSaudeReproTask(BaseTask):
         await self._atendimento_form.select_tipo_atendimento_fixo(iframe_frame, tipo_atendimento)
         # Select the specific condition using the text
         await self._atendimento_form.select_condicao_avaliada(iframe_frame, condicao_avaliada_text)
+        await asyncio.sleep(0.5) # Small pause to ensure dropdown is ready
+        logger.debug(f"Selecting specific condition: {rastreamento_label}")
+        await self._atendimento_form.select_condicao_avaliada(iframe_frame, rastreamento_label)
 
 
         # --- ALTERAÇÃO PRINCIPAL: Chamando a nova função centralizada ---

@@ -6,11 +6,12 @@ from app.automation.error_handler import AutomationErrorHandler, AbortAutomation
 # Importe as classes das suas Tarefas específicas aqui
 from app.automation.tasks.atend_hipertenso_task import AtendimentoHipertensoTask
 from app.automation.tasks.atend_diabetico_task import AtendimentoDiabeticoTask
-from app.automation.tasks.atend_a97_task import AtendimentoA97Task
+# from app.automation.tasks.atend_a97_task import AtendimentoA97Task # Se necessário
+from app.automation.tasks.atend_saude_mamografia_task import AtendimentoMamografiaTask
 from app.automation.tasks.proce_afericao_task import ProcedimentoAfericaoTask
 from app.automation.tasks.proce_saude_repro_task import ProcedimentoSaudeReproTask
 from app.automation.tasks.atend_saude_repro_task import AtendimentoSaudeReproTask
-from app.automation.tasks.hipertenso_procedimento_task import HipertensoProcedimentoTask
+# from app.automation.tasks.hipertenso_procedimento_task import HipertensoProcedimentoTask
 from app.automation.tasks.proce_diabetes_task import ProcedimentoDiabeticoTask
 
 # Importe ACS - ATD - HIPERTENSO Task
@@ -23,15 +24,17 @@ from app.core.errors import AutomationError
 # Define um dicionário para mapear o tipo de tarefa selecionado na GUI
 # para a classe da tarefa correspondente
 TASK_MAP = {
-    "ACS - ATD - HIPERTENSO": AcsAtdHipertensoTask, # <-- NOVA TAREFA ADICIONADA
-    "Atendimento Hipertenso": AtendimentoHipertensoTask, 
-    "Atendimento Diabetico": AtendimentoDiabeticoTask,
-    "Atendimento SEM DOENÇA": AtendimentoA97Task,
-    "Atendimento Saúde Sexual": AtendimentoSaudeReproTask,
-    "Procedimentos Aferição": ProcedimentoAfericaoTask,
-    "Procedimento Sáude Sexual": ProcedimentoSaudeReproTask,
-    "Procedimento Diabéticos": ProcedimentoDiabeticoTask,
-    "Hipertenso e Procedimento": HipertensoProcedimentoTask,
+    "Atend. Hipertenso": AtendimentoHipertensoTask,
+    "Proc. Hipertenso": ProcedimentoAfericaoTask,
+    "ACS - ATD - HIPERTENSO": AcsAtdHipertensoTask, 
+    "Atend. Diabetico": AtendimentoDiabeticoTask,
+    "Proc. Diabéticos": ProcedimentoDiabeticoTask,
+    "ATD - Mamografia": AtendimentoMamografiaTask,
+    "Atend. Saúde/Reprod.": AtendimentoSaudeReproTask,
+    "Proc. Saúde/Reprod.": ProcedimentoSaudeReproTask,
+    
+    # "Hipertenso e Procedimento": HipertensoProcedimentoTask,
+    # "Atendimento SEM DOENÇA": AtendimentoA97Task,
     # Adicione outras tarefas aqui
 }
 

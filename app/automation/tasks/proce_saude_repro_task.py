@@ -31,19 +31,9 @@ class ProcedimentoSaudeReproTask(BaseTask):
         # Verifique no seu site real se a ficha de Procedimentos tem esses campos comuns.
         await self._fill_common_patient_data(iframe_frame, row_data)
 
-        # Preenche os campos ESPECÍFICOS da ficha de Procedimentos para Saúde Sexual
-        # No seu código original, você preenchia o Exame/Procedimento Outros SIA com "0203010019" ou texto "Citopatológico"
-        # e selecionava o status "S".
+        await self._procedimento_form.select_exame_do_colo_uterino(iframe_frame)
+        await asyncio.sleep(1.5)
 
-        exame_sia_code_or_text = "0203010019" # Código ou texto fixo para Citopatológico
-        status_sia = "S" # Status fixo para o bloco SIA
-
-        # Chama os métodos da classe ProcedimentoForm para preencher estes campos
-        await self._procedimento_form.fill_outros_sia_exame(iframe_frame, exame_sia_code_or_text)
-        await self._procedimento_form.select_outros_sia_status(iframe_frame, status_sia)
-        # Clica no botão "Confirmar" do bloco Outros SIA
-        await self._procedimento_form.click_outros_sia_confirm_button(iframe_frame)
-        await asyncio.sleep(1) # Pequena pausa após confirmar o bloco SIA
 
         # Clica no botão "Confirmar" da ficha de Procedimentos principal
         # Este método já lida com possíveis alertas (como "Campos duplicados")

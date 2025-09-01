@@ -1,4 +1,4 @@
-# Arquivo: app/automation/pages/common_forms.py
+# Arquivo: app/automation/pages/common_forms.py (VERSÃO v1g - Seletor Local Atendimento Corrigido)
 import asyncio
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
@@ -42,6 +42,14 @@ class CommonForms(BasePage):
     # Exemplo: Se for um botão ou span com classe 'x-form-clear-trigger'
     _GENDER_CLEAR_BUTTON_SELECTOR = 'xpath=//label[contains(text(), "Sexo")]/following-sibling::span[@class="x-form-clear-trigger"]' # Exemplo (VERIFIQUE!)
     _LOCAL_ATENDIMENTO_CLEAR_BUTTON_SELECTOR = 'xpath=//label[contains(text(), "Local de atendimento")]/following-sibling::span[@class="x-form-clear-trigger"]' # Exemplo (VERIFIQUE!)
+
+    #TENTAR DEIXARA  A FORTMAÇÃO DE SELEÇÃO DE GÊNERO MAIS RÁPIDA
+    _SUGGESTION_ITEM_SELECTOR_TEMPLATE = "div.x-combo-list-item:has-text('{}')"
+    _GENDER_FIELD_SELECTOR = '//label[contains(text(), "Sexo")]/following-sibling::input'
+
+    #TENTAR DEIXAR A SELEÇÃO DO LOCAL DE ATENDIMENTO MAIS RÁPIDA
+    _LOCAL_ATENDIMENTO_INPUT_SELECTOR = '//label[contains(text(), "Local de atendimento")]/following-sibling::input'
+    _SUGGESTION_ITEM_SELECTOR_TEMPLATE = "div.x-combo-list-item:has-text('{}')"
 
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         super().__init__(page, error_handler)
@@ -178,6 +186,43 @@ class CommonForms(BasePage):
             raise AutomationError("Navegação Seleciona o gênero (Sexo) a partir de um valor numérico (1:Masculino, 2:Feminino, 3:Indeterminado).") from e
 
 
+    async def select_gender_02(self, iframe_frame: Locator, gender_value: int):
+        """
+        Seleciona o gênero (Sexo) simulando a digitação e clicando na sugestão.
+        """
+        gender_map = {1: "Masculino", 2: "Feminino", 3: "Indeterminado"}
+        gender_text = gender_map.get(gender_value)
+
+        if not gender_text:
+            logger.warning(f"Valor de gênero desconhecido: {gender_value}. Pulando seleção.")
+            return
+
+        logger.info(f"Selecionando gênero (ACS): {gender_text}")
+        
+        try:
+            # 1. Localiza o campo de input para "Sexo"
+            gender_field_locator = iframe_frame.locator(self._GENDER_FIELD_SELECTOR)
+
+            # 2. Simula a digitação do texto (ex: "Feminino")
+            await self._safe_fill_simule(gender_field_locator, gender_text, f"Campo Sexo - Digitar '{gender_text}'")
+
+            # 3. Localiza a sugestão correspondente na lista
+            suggestion_locator = iframe_frame.locator(
+                self._SUGGESTION_ITEM_SELECTOR_TEMPLATE.format(gender_text)
+            ).last
+
+            # 4. Clica diretamente na sugestão
+            await self._safe_click(suggestion_locator, f"Item da lista de sugestão: {gender_text}")
+            
+            await asyncio.sleep(1) # Pausa para garantir que o valor foi processado
+
+        except TimeoutError:
+            logger.error(f"Timeout: A sugestão '{gender_text}' não apareceu após a digitação.")
+            raise AutomationError(f"Timeout ao buscar a sugestão para o gênero '{gender_text}'.")
+        except Exception as e:
+            logger.error(f"Erro ao selecionar o gênero '{gender_text}': {e}", exc_info=True)
+            raise AutomationError(f"Falha ao selecionar o gênero '{gender_text}'.") from e
+
     async def select_local_atendimento(self, iframe_frame: Locator, local_atendimento: str):
         """
         Seleciona o Local de atendimento usando preenchimento do campo e navegação por teclas.
@@ -230,4 +275,42 @@ class CommonForms(BasePage):
         except Exception as e:
             logger.error(f"Erro ao selecionar Local de atendimento '{local_atendimento}': {e}")
             raise AutomationError("Falha na Navegação ao Selecionar Local de Atendiemnto")  from e
+    
+    # --- NOVA FUNÇÃO OTIMIZADA ---
+    async def select_local_atendimento_02(self, iframe_frame: Locator, local_atendimento_text: str):
+        """
+        Seleciona o Local de atendimento de forma rápida, simulando a digitação
+        e clicando diretamente na sugestão.
+        """
+        if not local_atendimento_text:
+            logger.warning("Valor vazio para Local de atendimento. Pulando seleção.")
+            return
+
+        logger.info(f"Selecionando Local de atendimento (rápido): {local_atendimento_text}")
+        
+        try:
+            # 1. Localiza o campo de input
+            local_field_locator = iframe_frame.locator(self._LOCAL_ATENDIMENTO_INPUT_SELECTOR)
+
+            # 2. Simula a digitação do texto para acionar o autocomplete
+            await self._safe_fill_simule(local_field_locator, local_atendimento_text, f"Campo Local de Atendimento - Digitar '{local_atendimento_text}'")
+
+            # 3. Localiza a sugestão correspondente na lista
+            # Usamos '.last' para o caso de múltiplas listas de sugestão existirem na página (comum em SPAs)
+            suggestion_locator = iframe_frame.locator(
+                self._SUGGESTION_ITEM_SELECTOR_TEMPLATE.format(local_atendimento_text)
+            ).last
+
+            # 4. Clica diretamente na sugestão encontrada
+            await self._safe_click(suggestion_locator, f"Item da lista de sugestão: {local_atendimento_text}")
+            
+            await asyncio.sleep(1) # Pequena pausa para garantir que o valor foi processado
+            logger.info(f"Local de atendimento '{local_atendimento_text}' selecionado com sucesso.")
+
+        except TimeoutError:
+            logger.error(f"Timeout: A sugestão '{local_atendimento_text}' não apareceu após a digitação.")
+            raise AutomationError(f"Timeout ao buscar a sugestão para o Local de atendimento '{local_atendimento_text}'.")
+        except Exception as e:
+            logger.error(f"Erro ao selecionar o Local de atendimento '{local_atendimento_text}': {e}", exc_info=True)
+            raise AutomationError(f"Falha ao selecionar o Local de atendimento '{local_atendimento_text}'.") from e
 

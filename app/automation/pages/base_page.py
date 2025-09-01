@@ -64,7 +64,7 @@ class BasePage:
          await self._handler.handle_error(e, step_description=f"Preencher: {step_description}", data_row={"text_to_fill": text})
         #  raise e
     
-    async def _safe_fill_simule(self, locator: Locator, text: str, step_description: str, delay_ms: int = 100):
+    async def _safe_fill_simule(self, locator: Locator, text: str, step_description: str, delay_ms: int = 50): #Padrão 100ms testado
         """
         Simula digitação realista em um campo de texto, usando `.type()` com delay entre teclas.
         Útil para campos que disparam eventos como autocomplete apenas com interação humana.

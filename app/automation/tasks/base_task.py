@@ -392,11 +392,11 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
              # Converte para int com tratamento básico de erro
              try:
                   gender_int = int(row_data[3])
-                  await self._common_forms.select_gender(iframe_frame, gender_int)
+                  await self._common_forms.select_gender_02(iframe_frame, gender_int)
              except (ValueError, TypeError):
                   logger.warning(f"Valor inválido para Gênero na linha: {row_data[3]}. Pulando seleção de gênero.")
          if len(row_data) > 4:
-             await self._common_forms.select_local_atendimento(iframe_frame, str(row_data[4]))
+             await self._common_forms.select_local_atendimento_02(iframe_frame, str(row_data[4]))
 
          # Pausa opcional após preencher campos comuns
          # await asyncio.sleep(1)
