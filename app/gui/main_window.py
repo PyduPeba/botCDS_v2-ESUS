@@ -1,17 +1,17 @@
-# Arquivo: app/gui/main_window.py
+#app/gui/main_window.py (VERSÃO v3a - Ajuste de Layout Data)
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+    QLineEdit, QPushButton, QCheckBox, QFrame, QGridLayout, QMessageBox
+)
+from PyQt5.QtCore import Qt, QDate, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QColor, QPalette
+
+import csv
 import sys
 import os
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
-                             QPushButton, QTextEdit, QHBoxLayout, QCheckBox,
-                             QSizePolicy, QLineEdit, QMessageBox, QComboBox) # Adicionado QComboBox para seleção da tarefa
-from PyQt5.QtGui import QPixmap, QPalette, QColor, QBrush, QTextCursor
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QPoint, QTimer, QObject, QMetaObject # Importados QThread, QObject, QMetaObject
-import asyncio # Importado asyncio
-import pandas as pd # Importado pandas
-import csv
 
-# ** IMPORTAÇÃO DE DATETIME **
-from datetime import datetime # Importa datetime para manipulação de datas
+# Suporte a lógica de automação
+from datetime import datetime
 
 # Importa componentes do nosso app
 from app.core.app_config import AppConfig
@@ -30,225 +30,227 @@ class MovableLabel(QLabel):
     def move_up(self, pixels):
         self.setGeometry(self.x(), self.y() - pixels, self.width(), self.height())
 
-class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
-    # Sinal que a MainWindow emitirá para o Worker para informar a ação do usuário
-    # Este sinal é CONECTADO a um slot NO WORKER
-    user_action_signal = pyqtSignal(str) # Emite 'continue', 'skip', ou 'abort'
+
+class MainWindow(QWidget):
+
+    user_action_signal = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
-
-        # Instâncias para gerenciar a thread de automação e o worker
         self._automation_thread = None
         self._automation_worker: Worker = None
 
-        self.main_layout = None # Definir layout principal
-        self._file_manager = FileManager() # Instância do gerenciador de arquivos
-
+        self.main_layout = None
+        self._file_manager = FileManager()
         self.initUI()
-        self._load_initial_date() # Carrega a data inicial ao abrir a janela
-
-    def set_background_image(self, image_path_relative):
-        """Configura a imagem de fundo usando um caminho relativo à pasta resources/img."""
-        # Determina o caminho completo para a imagem na pasta "resources/img"
-        # BASE_DIR está definido no AppConfig
-        img_path = AppConfig.BASE_DIR / "resources" / "img" / image_path_relative
-
-        if not img_path.exists():
-             logger.warning(f"Imagem de fundo não encontrada: {img_path}")
-             # Tenta o caminho relativo original se o novo não funcionar (compatibilidade ou debug)
-             img_path = Path(os.path.dirname(os.path.abspath(__file__))) / ".." / "img" / image_path_relative
-             if not img_path.exists():
-                 logger.warning(f"Imagem de fundo não encontrada no caminho de fallback: {img_path}")
-                 return # Não faz nada se a imagem não for encontrada
-
-        logger.info(f"Carregando imagem de fundo: {img_path}")
-        try:
-             # Crie um QLabel para exibir a imagem
-             background_label = QLabel(self)
-             pixmap = QPixmap(str(img_path)) # Use str() para compatibilidade com QPixmap
-
-             if pixmap.isNull():
-                  logger.warning(f"Não foi possível carregar a imagem de fundo de {img_path}")
-                  return
-
-             # Redimensionar pixmap para a largura da janela (ajuste conforme necessário)
-             # Nota: Redimensionar aqui pode distorcer a imagem. É melhor deixar o layout/auto size lidar com isso
-             # ou usar um QLabel com scaledContents=True dentro de um layout.
-             # Para um fundo fixo, setting geometry manualmente ou usando um QPalette com backgroundBrush é comum.
-             # Vamos manter o método original por enquanto, mas esteja ciente das limitações.
-             # Uma abordagem mais robusta para fundo seria usar QPalette.
-             # Exemplo básico com QPalette:
-             # palette = QPalette()
-             # palette.setBrush(QPalette.Background, QBrush(pixmap.scaled(self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)))
-             # self.setPalette(palette)
-             # self.setAutoFillBackground(True)
-
-             # Abordagem original (menos robusta para redimensionamento da janela)
-             pixmap = pixmap.scaledToWidth(self.width()) # Redimensiona para a largura atual da janela
-             background_label.setPixmap(pixmap)
-
-             # Configurar o QLabel para centralizá-lo na janela (ajustar lógica de posicionamento)
-             # Posicionar elementos fixos sobre um fundo redimensionável é tricky com layout manual.
-             # Vamos confiar nos layouts para a maioria dos elementos e talvez usar um QLabel para a imagem com size policy.
-             # Por enquanto, apenas exibe a imagem, o posicionamento pode precisar de ajuste fino.
-             # background_label.setGeometry(0, 0, pixmap.width(), pixmap.height()) # Posiciona no canto superior esquerdo
-             # background_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-             # background_label.setScaledContents(True) # Permite que o QLabel escale o pixmap
-
-             # Para o seu layout atual, posicionar manualmente PODE funcionar, mas é frágil.
-             # label_width = pixmap.width()
-             # label_height = pixmap.height()
-             # label_x = (self.width() - label_width) // 2
-             # label_y = (self.height() - label_height) // 2
-             # background_label.setGeometry(label_x, label_y, label_width, label_height)
-             pass # Vamos remover o posicionamento manual e focar nos layouts para os outros elementos
-        except Exception as e:
-             logger.error(f"Erro ao configurar imagem de fundo: {e}")
-
+        self._load_initial_date()
 
     def initUI(self):
         """Configura a interface gráfica principal."""
         # Configurar a imagem de fundo (chame ANTES de configurar o layout principal se for manual)
         # Para uma abordagem mais PyQt-like, considere usar QPalette no futuro.
         # self.set_background_image("capa.png") # Desativado o posicionamento manual na função
+        
+        self.setWindowTitle('CDS ESUS v5.3')
+        self.setGeometry(100, 100, 600, 450)
+        palette = self.palette()
+        palette.setColor(QPalette.Window, QColor(240, 242, 245))
+        self.setPalette(palette)
 
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(40)
 
-        # Layout principal
-        self.main_layout = QVBoxLayout(self) # Define o layout principal para a janela
+        title_label = QLabel('CDS DIGT <span style="font-weight:bold; color:#4C72E0;">v5.3</span>')
+        title_label.setFont(QFont('Segoe UI', 28, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setTextFormat(Qt.RichText)
+        main_layout.addWidget(title_label)
 
-        # Configuração de margens e alinhamentos para o layout principal
-        # Ajuste as margens e espaçamento conforme necessário
-        # self.main_layout.setContentsMargins(50, 205, 150, 150) # Margens manuais podem conflitar com layouts
-        self.main_layout.setSpacing(10) # Espaçamento entre widgets
+        subtitle_label = QLabel('Automação inteligente e eficiente com Playwright/Asyncio')
+        subtitle_label.setFont(QFont('Segoe UI', 11))
+        subtitle_label.setAlignment(Qt.AlignCenter)
+        subtitle_label.setStyleSheet("color: #6B7280;")
+        main_layout.addWidget(subtitle_label)
 
-        # --- Elementos da GUI ---
+        content_grid = QGridLayout()
+        content_grid.setHorizontalSpacing(30)
+        content_grid.setVerticalSpacing(30)
+        content_grid.setAlignment(Qt.AlignCenter)
 
-        # QLabel para a instrução inicial
-        # label = MovableLabel('Escolha uma opção:', self) # Usar MovableLabel é desnecessário com layouts
-        label = QLabel('Escolha uma opção:', self)
-        label.setStyleSheet("font-size: 15pt;")
-        # Alinhe o label à esquerda ou centro conforme desejado
-        # label.setAlignment(Qt.AlignLeft)
-        self.main_layout.addWidget(label)
-
-        # ComboBox para selecionar o tipo de tarefa
-        task_label = QLabel('Selecionar Tarefa:', self)
-        task_label.setStyleSheet("font-size: 12pt;")
-        self.main_layout.addWidget(task_label)
-
-        self.task_combobox = QComboBox(self)
-        # Adiciona os nomes das tarefas do nosso mapa TASK_MAP
+        # --- CARD TAREFA ---
+        task_card = QFrame()
+        task_card.setFixedWidth(300)
+        task_card.setMinimumWidth(300)
+        task_card.setMinimumHeight(240)
+        task_card.setMaximumHeight(300)
+        task_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                border-top-right-radius: 20px;
+                border-bottom-right-radius: 20px;
+                padding: 15px;
+            }
+        """)
+        task_layout = QVBoxLayout(task_card)
+        task_layout.setSpacing(1)
+        task_layout.addWidget(QLabel('<span style="font-size:18px; font-weight:bold;">Definir Tarefa</span>'), alignment=Qt.AlignCenter)
+        task_label = QLabel('Escolhe a tarefa:')
+        task_label.setFont(QFont('Segoe UI', 11))
+        # task_label.setStyleSheet("margin-top: -8px;")
+        task_layout.addWidget(task_label)
+        self.task_combobox = QComboBox()
         self.task_combobox.addItems(TASK_MAP.keys())
-        self.task_combobox.setStyleSheet("font-size: 12pt;")
-        self.main_layout.addWidget(self.task_combobox)
+        self.task_combobox.setFont(QFont('Segoe UI', 11))
+        self.task_combobox.setStyleSheet("""
+            QComboBox {
+                padding: 12px;
+                border: 1px solid #4C72E0;
+                border-radius: 15px;
+                background-color: #F8F9FA;
+            }
+            QComboBox::drop-down {
+                border: none;
+                padding-right: 15px;
+            }
+            QComboBox::down-arrow {
+                image: url(data:image/svg+xml;utf8,<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234C72E0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='2' width='20' height='20' rx='3' ry='3' fill='%23F8F9FA' stroke='%234C72E0' stroke-width='1'/><polyline points='6 9 12 15 18 9'/></svg>);
+                width: 14px;
+                height: 14px;
+                margin-right: 8px;
+            }
+            QComboBox::view {
+                border: 1px solid #4C72E0;
+                border-radius: 5px;
+                background-color: white;
+                selection-background-color: #4C72E0;
+                selection-color: white;
+                outline: 0px;
+                padding: 5px;
+            }
+            QComboBox::view::item {
+                padding: 10px 8px;
+                min-height: 25px;
+            }
+            QComboBox::view::item:hover {
+                background-color: #E0E9FF;
+                color: #333;
+            }
+        """)
+        task_layout.addWidget(self.task_combobox)
+        task_layout.addStretch(1)
+        content_grid.addWidget(task_card, 0, 0)
 
-
-        # --- Entrada de Data ---
-        # Usaremos um QHBoxLayout para colocar o label, campo de texto e botão Salvar Data lado a lado
-        date_layout = QHBoxLayout()
-
-        self.data_label = QLabel("Inserir a Data:", self)
-        self.data_label.setStyleSheet("font-size: 12pt;")
-        date_layout.addWidget(self.data_label) # Adiciona ao layout horizontal
-
-        self.data_edit = QLineEdit(self)
-        self.data_edit.setPlaceholderText("dd/mm/aaaa") # Texto de placeholder
-        self.data_edit.setInputMask("99/99/9999") # Máscara para garantir formato
-        self.data_edit.setStyleSheet("font-size: 12pt;")
-        self.data_edit.editingFinished.connect(self.format_date) # Formata ao sair do campo
-        date_layout.addWidget(self.data_edit) # Adiciona ao layout horizontal
-
-        self.save_date_button = QPushButton('Salvar Data', self)
-        self.set_button_style(self.save_date_button, "red") # Estilo inicial vermelho
+        # --- CARD DATA ---
+        date_card = QFrame()
+        date_card.setFixedWidth(300)
+        date_card.setMinimumWidth(300)
+        date_card.setMinimumHeight(240)
+        date_card.setMaximumHeight(300)
+        date_card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-top-left-radius: 20px;
+                border-bottom-left-radius: 20px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                padding: 15px;
+            }
+        """)
+        date_layout = QVBoxLayout(date_card)
+        date_layout.setSpacing(1)
+        date_layout.addWidget(QLabel('<span style="font-size:18px; font-weight:bold;">Config Data</span>'), alignment=Qt.AlignCenter)
+        date_label = QLabel('Insira a data inicial:')
+        date_label.setFont(QFont('Segoe UI', 11))
+        date_layout.addWidget(date_label)
+        row_date_layout = QHBoxLayout()
+        row_date_layout.setSpacing(10)
+        self.data_edit = QLineEdit()
+        self.data_edit.setInputMask("99/99/9999")
+        self.data_edit.setFont(QFont('Segoe UI', 11))
+        self.data_edit.editingFinished.connect(self.format_date)
+        self.data_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 12px;
+                border: 1px solid #ccc;
+                border-radius: 15px;
+                background-color: #F8F9FA;
+            }
+        """)
+        row_date_layout.addWidget(self.data_edit)
+        self.save_date_button = QPushButton("Save Data")
+        self.save_date_button.setFont(QFont('Segoe UI', 11, QFont.Bold))
+        self.save_date_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28A745;
+                color: white;
+                padding: 12px 15px;
+                border-radius: 15px;
+            }
+        """)
         self.save_date_button.clicked.connect(self.save_date_to_csv)
-        date_layout.addWidget(self.save_date_button) # Adiciona ao layout horizontal
+        row_date_layout.addWidget(self.save_date_button)
+        date_layout.addLayout(row_date_layout)
+        date_layout.addStretch(1)
+        content_grid.addWidget(date_card, 0, 1)
 
-        # Adiciona o layout horizontal de data ao layout principal
-        self.main_layout.addLayout(date_layout)
+        # --- CARD AÇÕES ---
+        action_card = QFrame()
+        action_card.setStyleSheet("QFrame { background-color: white; border-radius: 20px; padding: 30px; }")
+        action_layout = QVBoxLayout(action_card)
+        action_layout.setSpacing(5)
 
-        # --- CHECKBOX DE LOGIN MANUAL (NOVO) ---
-        self.checkbox_manual_login = QCheckBox("Login Manual para outros perfis (ACS/Médico)", self) # <-- NOVO
-        self.checkbox_manual_login.setStyleSheet("font-size: 10pt; font-style: italic; color: #333;") # <-- NOVO
-        self.checkbox_manual_login.setToolTip("Marque esta opção se precisar selecionar manualmente o perfil/equipe após o login (ex: ACS, Médico). O robô fará uma pausa de 5 segundos.") # <-- NOVO
-        self.main_layout.addWidget(self.checkbox_manual_login) # <-- NOVO
-        # --- FIM DO NOVO BLOCO ---
-
-        # --- CheckBox para apagar arquivo ---
-        self.checkboxDeleteFile = QCheckBox("Apagar dados.csv após conclusão?", self)
-        self.checkboxDeleteFile.setStyleSheet("font-size: 10pt;")
-        # Conecta o sinal stateChanged para salvar a configuração imediatamente
+        self.checkbox_manual_login = QCheckBox("Login Manual (ACS/Médico)")
+        self.checkbox_manual_login.setFont(QFont('Segoe UI', 11))
+        self.checkboxDeleteFile = QCheckBox("Apagar “dados.csv” após concluir")
         self.checkboxDeleteFile.stateChanged.connect(self.on_checkbox_delete_changed)
-        # Carrega o estado salvo ao iniciar
-        self.checkboxDeleteFile.setChecked(AppConfig.delete_file_after_completion)
-        self.main_layout.addWidget(self.checkboxDeleteFile)
+        self.checkboxDeleteFile.setFont(QFont('Segoe UI', 11))
 
-        # --- Botões de Automação ---
-        # Usaremos um layout vertical ou horizontal para organizar os botões
-        # Vamos criar um layout para os botões principais de iniciar
-        button_start_layout = QVBoxLayout() # Layout vertical para os botões de iniciar
+        action_layout.addWidget(self.checkbox_manual_login)
+        action_layout.addWidget(self.checkboxDeleteFile)
 
-        # Removendo os botões individuais por tipo e substituindo por um botão "Iniciar Automação" genérico
-        # self.btn_atendimento_hipertenso = QPushButton('Atendimento Hipertenso', self) # REMOVIDO
-        # self.btn_procedimentos_afericao = QPushButton('Procedimentos Aferição', self) # REMOVIDO
-        # ... outros botões removidos ...
-
-        self.btn_start_automation = QPushButton('Iniciar Automação', self)
-        self.btn_start_automation.setFixedSize(250, 60) # Tamanho fixo maior
-        self.btn_start_automation.setStyleSheet("font-size: 16pt;")
+        self.btn_start_automation = QPushButton("Iniciar Automação")
+        self.btn_start_automation.setFont(QFont('Segoe UI', 14, QFont.Bold))
+        self.btn_start_automation.setFixedSize(300, 60)
         self.btn_start_automation.clicked.connect(self.start_automation) # Conecta ao novo método de iniciar
-        button_start_layout.addWidget(self.btn_start_automation, alignment=Qt.AlignCenter) # Centraliza o botão
+        self.btn_start_automation.setStyleSheet("""
+            QPushButton {
+                background-color: #4461D7;
+                color: white;
+                border-radius: 20px;
+            }
+        """)
+        action_layout.addWidget(self.btn_start_automation, alignment=Qt.AlignCenter)
 
-        # Adiciona o layout dos botões de iniciar ao layout principal
-        self.main_layout.addLayout(button_start_layout)
-
-        # --- Área para Log/Status (Opcional mas útil) ---
-        # Podemos adicionar uma área de texto para mostrar o log ou status em tempo real
-        # log_label = QLabel("Log/Status:")
-        # self.main_layout.addWidget(log_label)
-        # self.log_text_edit = QTextEdit(self)
-        # self.log_text_edit.setReadOnly(True)
-        # self.main_layout.addWidget(self.log_text_edit)
-        # Nota: Integrar o logger.py para escrever aqui requer um handler customizado para PyQt.
-
-        # --- Botão Exit ---
-        self.btn_exit = QPushButton('Exit', self)
-        self.btn_exit.setFixedSize(100, 40) # Tamanho menor
+        # --- Botão Sair ---
+        self.btn_exit = QPushButton("Sair")
+        self.btn_exit.setFixedSize(150, 45)
+        self.btn_exit.setFont(QFont('Segoe UI', 11, QFont.DemiBold))
         self.btn_exit.clicked.connect(self.exit_app)
-        # Adicionar o botão de saída em um layout separado para posicionamento específico
-        exit_layout = QHBoxLayout()
-        exit_layout.addStretch(1) # Empurra o botão para a direita
-        exit_layout.addWidget(self.btn_exit)
-        self.main_layout.addLayout(exit_layout)
+        action_layout.addWidget(self.btn_exit, alignment=Qt.AlignCenter)
 
-        # --- Créditos e Versão ---
-        # Estes podem ser adicionados em um layout horizontal na parte inferior
-        info_layout = QHBoxLayout()
+        content_grid.addWidget(action_card, 1, 0, 1, 2)
+        main_layout.addLayout(content_grid)
 
-        self.creditos_label = QLabel("Copyright DIGT and Kʎɐꓘ", self)
-        self.creditos_label.setWordWrap(True) # Permite quebra de linha
-        info_layout.addWidget(self.creditos_label)
+        # Rodapé
+        footer = QHBoxLayout()
+        copyright = QLabel("© 2025 Kʎɐꓘ")
+        copyright.setFont(QFont('Segoe UI', 10))
+        version_pec = QLabel('PEC: <span style="color:green;">Versão 5.4.11</span>')
+        version_pec.setTextFormat(Qt.RichText)
+        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3</span>')
+        version_app.setTextFormat(Qt.RichText)
+        footer.addWidget(copyright)
+        footer.addStretch()
+        footer.addWidget(version_pec)
+        footer.addWidget(version_app)
+        main_layout.addLayout(footer)
 
-        self.version_pec_label = QLabel('PEC: Versão 5.3.19', self) # Renomeado para clareza
-        self.version_pec_label.setStyleSheet("color: green; font-weight: bold; font-size: 12px;")
-        info_layout.addWidget(self.version_pec_label)
+        self.setLayout(main_layout)
 
-        self.version_app_label = QLabel('App Version: 2.0', self) # Versão do seu app
-        self.version_app_label.setStyleSheet("color: blue; font-weight: bold; font-size: 12px;")
-        info_layout.addWidget(self.version_app_label)
-
-        self.main_layout.addLayout(info_layout)
-
-
-        # Configurações da janela principal
-        self.setGeometry(100, 100, 700, 600)  # Tamanho inicial
-        self.setWindowTitle('Robo DIGT v2.0 (Playwright/Asyncio)') # Novo título
-
-        # Define o layout principal para a janela
-        self.setLayout(self.main_layout)
-
-        # Habilitar/desabilitar botões durante a automação (inicialmente habilitados)
-        self._set_ui_enabled(True)
+        self._set_ui_enabled(True) # Garante que a UI comece habilitada
 
     def _load_initial_date(self):
         """Carrega a data salva em data.csv ao iniciar o app."""
@@ -260,7 +262,6 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         else:
              self.data_edit.clear()
              self.set_button_style(self.save_date_button, "red")
-
 
     def format_date(self):
         """Formata o texto inserido para o formato dd/mm/aaaa e valida."""
@@ -290,8 +291,7 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         else:
              # Se o formato não tem 10 caracteres, ainda não é uma data completa no formato esperado
              self.set_button_style(self.save_date_button, "red")
-
-
+    
     def set_button_style(self, button, color):
         """Define o estilo (cor) de um botão."""
         if color == "red":
@@ -366,7 +366,7 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
             logger.error(f"Erro ao salvar os dados: {e}", exc_info=True)
             QMessageBox.critical(self, "Erro ao Salvar", f"Ocorreu um erro ao salvar a data: {e}")
             self.set_button_style(self.save_date_button, "red")
-
+            
     def _log_used_date_to_file(self, user_date):
          """Escreve a data usada em um arquivo de log separado, replicando o comportamento original."""
          # Determina o caminho do arquivo de log na raiz do projeto
@@ -380,12 +380,10 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
          except Exception as e:
              logger.error(f"Erro ao escrever log de data usada em {log_file_path}: {e}")
 
-
     def on_checkbox_delete_changed(self, state):
         """Slot para salvar a configuração do checkbox."""
-        AppConfig.set_delete_file_after_completion(state == Qt.Checked)
+        AppConfig.delete_file_after_completion = (state == Qt.Checked)
         logger.info(f"Config 'Apagar dados.csv': {AppConfig.delete_file_after_completion}")
-
 
     def start_automation(self):
         """Inicia a automação em uma nova thread."""
@@ -459,7 +457,6 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         self._automation_thread.start()
         logger.info("Thread de automação iniciada.")
 
-
     def _set_ui_enabled(self, enabled: bool):
         """Habilita ou desabilita os controles da UI principal."""
         self.task_combobox.setEnabled(enabled)
@@ -497,7 +494,6 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
         else:
              logger.error("MainWindow: Worker não existe ao tentar enviar ação do usuário!")
              # Se o worker não existe, a automação já deve ter terminado ou abortado de outra forma.
-
 
     def on_automation_finished(self, result_message: str):
         """Slot chamado quando o Worker termina (sinal finished)."""
@@ -538,4 +534,10 @@ class MainWindow(QWidget): # Renomeado de MinhaApp para MainWindow
                   # Força o encerramento da thread (não recomendado, pode deixar recursos abertos)
                   # self._automation_thread.terminate() # Descomente se precisar forçar muito
                   # self._automation_thread.wait() # Espera terminar após o terminate
-        QApplication.quit() # Fecha a aplicação PyQt
+        QApplication.quit()
+
+# if __name__ == "__main__":
+#     app = QApplication(sys.argv)
+#     win = MainWindow()
+#     win.show()
+#     sys.exit(app.exec_())
