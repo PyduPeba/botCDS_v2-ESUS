@@ -274,7 +274,7 @@ class MainWindow(QWidget):
         copyright.setFont(QFont('Segoe UI', 10))
         version_pec = QLabel('PEC: <span style="color:green;">Versão 5.4.11</span>')
         version_pec.setTextFormat(Qt.RichText)
-        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3.2</span>')
+        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3.3c</span>')
         version_app.setTextFormat(Qt.RichText)
         footer.addWidget(copyright)
         footer.addStretch()
