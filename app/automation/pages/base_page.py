@@ -38,7 +38,10 @@ class BasePage:
                                               step_description="Esperando máscara de carregamento sumir")
         except Exception as e:
             logger.error(f"Erro inesperado ao esperar máscara de carregamento: {e}", exc_info=True)
-            await self._handler.handle_error(e, step_description="Erro inesperado esperando máscara de carregamento")
+            user_action = await self._handler.handle_error(e, step_description="Erro inesperado esperando máscara de carregamento")
+            if user_action == "continue":
+                logger.info("Usuário optou por continuar apesar do erro na máscara de carregamento.")
+            raise AutomationError("Retentando registro devido à máscara de carregamento após intervenção manual.") from e
 
     async def _safe_click(self, locator: Locator, step_description: str):
      """Clica em um elemento com tratamento de erro."""
@@ -61,10 +64,11 @@ class BasePage:
          await locator.fill(text)
          logger.debug(f"Campo '{step_description}' preenchido com sucesso.")
      except Exception as e:
-         await self._handler.handle_error(e, step_description=f"Preencher: {step_description}", data_row={"text_to_fill": text})
-        #  raise e
+            user_action = await self._handler.handle_error(e, step_description=f"Preencher: {step_description}", data_row={"text_to_fill": text})
+            if user_action == "continue":
+                raise AutomationError(f"Retentando registro devido ao preenchimento de '{step_description}' após intervenção manual.") from e
     
-    async def _safe_fill_simule(self, locator: Locator, text: str, step_description: str, delay_ms: int = 50): #Padrão 100ms testado
+    async def _safe_fill_simule(self, locator: Locator, text: str, step_description: str, delay_ms: int = 20): #Padrão 100ms testado
         """
         Simula digitação realista em um campo de texto, usando `.type()` com delay entre teclas.
         Útil para campos que disparam eventos como autocomplete apenas com interação humana.
@@ -88,9 +92,9 @@ class BasePage:
             logger.debug(f"Campo '{step_description}' preenchido com sucesso usando digitação simulada.")
 
         except Exception as e:
-            logger.error(f"Erro ao simular preenchimento de '{step_description}': {e}", exc_info=True)
-            await self._handler.handle_error(e, step_description=f"Preencher (simulado): {step_description}", data_row={"text_to_fill": text})
-            # raise e
+            user_action = await self._handler.handle_error(e, step_description=f"Preencher (simulado): {step_description}", data_row={"text_to_fill": text})
+            if user_action == "continue":
+                raise AutomationError(f"Retentando registro devido ao preenchimento simulado de '{step_description}' após intervenção manual.") from e
 
 
     async def _safe_select_option(self, locator: Locator, value: str, step_description: str):
@@ -101,8 +105,9 @@ class BasePage:
              await locator.select_option(value)
              logger.debug(f"Opção '{value}' selecionada com sucesso no dropdown '{step_description}'.")
          except Exception as e:
-             await self._handler.handle_error(e, step_description=f"Selecionar opção '{value}' no dropdown: {step_description}", data_row={"value_to_select": value})
-             # Re-levantar implicitamente
+            user_action = await self._handler.handle_error(e, step_description=f"Selecionar opção '{value}' no dropdown: {step_description}", data_row={"value_to_select": value})
+            if user_action == "continue":
+                raise AutomationError(f"Retentando registro devido à seleção de opção em '{step_description}' após intervenção manual.") from e
 
     async def _safe_wait_for_selector(self, selector: str, state="visible", timeout=10000, step_description: str = None):
         """Espera por um seletor com tratamento de erro."""

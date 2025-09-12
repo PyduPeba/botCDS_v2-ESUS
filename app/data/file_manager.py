@@ -1,9 +1,10 @@
-# Arquivo: app/data/file_manager.py (CORRIGIDO 50 - PARTE 0)
+# Arquivo: app/data/file_manager.py (VERSÃO v1b - Ordenação de Arquivos)
 import pandas as pd
 import os
 import json
 import shutil
 import sys
+import re
 from pathlib import Path
 from app.core.logger import logger
 from app.core.app_config import AppConfig # Para verificar a configuração de apagar arquivo
@@ -24,6 +25,16 @@ class FileManager:
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
         self.PROCESSED_REGISTRY.parent.mkdir(parents=True, exist_ok=True) # Garante a pasta do registro
+
+    def _natural_sort_key(self, filename: str):
+        """
+        Gera uma chave para ordenação "natural", tratando números dentro de strings como números.
+        Ex: "dados1.csv", "dados2.csv", ..., "dados10.csv"
+        """
+        # Extrai a parte numérica do nome do arquivo (ex: "dados10.csv" -> 10)
+        # Se não encontrar número, usa -1 para colocar no início (útil para "dados.csv")
+        match = re.search(r'(\d+)\.csv$', filename)
+        return int(match.group(1)) if match else -1
 
     def _is_file_processed(self, filename: str) -> bool:
         """Verifica se um arquivo (pelo nome) já está registrado como processado."""
@@ -50,10 +61,10 @@ class FileManager:
         except IOError as e:
             logger.error(f"Erro ao salvar registro de arquivos processados {self.PROCESSED_REGISTRY}: {e}")
 
-    def find_next_file_to_process(self) -> Path: # Retorna Path ou None
+    def find_next_file_to_process(self) -> Path | None:
         """
-        Encontra o próximo arquivo dados*.csv na pasta de arquivos
-        que ainda não foi processado. Prioriza 'dados.csv' da raiz se não processado.
+        Encontra o próximo arquivo dados*.csv na pasta de arquivos que ainda não foi processado.
+        Prioriza 'dados.csv' da raiz, depois os arquivos na subpasta em ordem numérica.
         """
         processed_files = self._load_processed_registry()
 
@@ -62,18 +73,25 @@ class FileManager:
         main_data_file_path = self.DATA_DIR / main_data_file_name
         if main_data_file_path.exists() and main_data_file_name not in processed_files:
             logger.info(f"Próximo arquivo a processar encontrado: {main_data_file_name}")
-            return main_data_file_path # Retorna o Path completo
+            return main_data_file_path
 
-        # 2. Listar arquivos na subpasta 'arquivos' (se dados.csv já foi processado ou não existe)
-        files_in_archive_dir = sorted([f.name for f in (self.DATA_DIR / "arquivos").iterdir() if f.is_file() and f.name.startswith('dados') and f.name.lower().endswith('.csv')])
+        # 2. Listar e ordenar arquivos na subpasta 'arquivos'
+        # --- ALTERAÇÃO AQUI: Usando a chave de ordenação natural ---
+        files_in_archive_dir = [
+            f.name for f in (self.DATA_DIR / "arquivos").iterdir() 
+            if f.is_file() and f.name.startswith('dados') and f.name.lower().endswith('.csv')
+        ]
+        # Ordena usando a nova função _natural_sort_key
+        files_in_archive_dir_sorted = sorted(files_in_archive_dir, key=self._natural_sort_key)
+        # --- FIM DA ALTERAÇÃO ---
 
-        for filename in files_in_archive_dir:
+        for filename in files_in_archive_dir_sorted: # Itera sobre a lista ORDENADA
             if filename not in processed_files:
                 logger.info(f"Próximo arquivo a processar encontrado: {filename}")
-                return (self.DATA_DIR / "arquivos" / filename) # Retorna o Path completo
+                return (self.DATA_DIR / "arquivos" / filename)
         
         logger.info("Nenhum arquivo dados*.csv não processado encontrado.")
-        return None # Nenhum arquivo novo encontrado
+        return None
 
 
     def load_data_file(self, file_path: Path):
@@ -142,8 +160,8 @@ class FileManager:
     # ** NOVO MÉTODO: CONTA TODOS OS ARQUIVOS DE DADOS NÃO PROCESSADOS **
     def count_all_unprocessed_files(self) -> int:
         """
-        Conta todos os arquivos de dados (dados.csv na raiz e dados*.csv na subpasta arquivos)
-        que ainda não foram marcados como processados.
+        Conta todos os arquivos de dados que ainda não foram marcados como processados,
+        usando a mesma lógica de ordenação.
         """
         processed_files = self._load_processed_registry()
         all_unprocessed_names_found = []
@@ -154,13 +172,17 @@ class FileManager:
         if main_data_file_path.exists() and main_data_file_name not in processed_files:
             all_unprocessed_names_found.append(main_data_file_name)
         
-        # 2. Verificar arquivos na subpasta 'arquivos'
-        # Ordenar para garantir ordem consistente se for o caso.
-        for f in sorted((self.DATA_DIR / "arquivos").iterdir()):
-            if (f.is_file() and 
-                f.name.startswith('dados') and 
-                f.name.lower().endswith('.csv') and 
-                f.name not in processed_files):
-                all_unprocessed_names_found.append(f.name)
+        # 2. Verificar arquivos na subpasta 'arquivos' (e ordenar)
+        files_in_archive_dir = [
+            f.name for f in (self.DATA_DIR / "arquivos").iterdir() 
+            if f.is_file() and f.name.startswith('dados') and f.name.lower().endswith('.csv')
+        ]
+        # --- ALTERAÇÃO AQUI: Usando a chave de ordenação natural ---
+        files_in_archive_dir_sorted = sorted(files_in_archive_dir, key=self._natural_sort_key)
+        # --- FIM DA ALTERAÇÃO ---
+
+        for filename in files_in_archive_dir_sorted: # Itera sobre a lista ORDENADA
+            if filename not in processed_files:
+                all_unprocessed_names_found.append(filename)
         
-        return len(all_unprocessed_names_found) # Retorna a contagem
+        return len(all_unprocessed_names_found)

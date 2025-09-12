@@ -17,6 +17,7 @@ resources/config/*
 resources/data_input/*
 app/gui/main_window - Visual Retro Funcional 01.09.py
 app/gui/old_main_window.py
+app/gui/worker - Funcional 25.08.py
 video/*
 icon.ico
 *ico

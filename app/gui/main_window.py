@@ -39,6 +39,7 @@ class MainWindow(QWidget):
         super().__init__()
         self._automation_thread = None
         self._automation_worker: Worker = None
+        self._use_chrome_browser = False
 
         self.main_layout = None
         self._file_manager = FileManager()
@@ -50,18 +51,44 @@ class MainWindow(QWidget):
         # Configurar a imagem de fundo (chame ANTES de configurar o layout principal se for manual)
         # Para uma abordagem mais PyQt-like, considere usar QPalette no futuro.
         # self.set_background_image("capa.png") # Desativado o posicionamento manual na função
+        # --- NOVA LÓGICA PARA TÍTULO DINÂMICO ---
+        # 1. Obtém o caminho do executável ou script
+        if getattr(sys, 'frozen', False):
+            # Se for um executável PyInstaller
+            app_path = os.path.dirname(sys.executable)
+        else:
+            # Se for um script Python (ambiente de desenvolvimento)
+            app_path = os.path.dirname(os.path.abspath(__file__))
+
+        # 2. Extrai os nomes das últimas duas pastas
+        # Ex: C:\Users\CeearaU\Desktop\BotTratamento\pasta_de_saida\ipu_hipertensao\INGAZEIRA
+        # last_folder_name = INGAZEIRA
+        # second_last_folder_name = ipu_hipertensao
+        last_folder_name = os.path.basename(app_path)
+        second_last_folder_name = os.path.basename(os.path.dirname(app_path))
+
+        # 3. Concatena os nomes para o título da janela
+        extra_title_info = ""
+        if second_last_folder_name and second_last_folder_name != "dist" and second_last_folder_name != "site-packages":
+            extra_title_info += f" - {second_last_folder_name}"
+        if last_folder_name and last_folder_name != "dist" and last_folder_name != "site-packages":
+            extra_title_info += f" - {last_folder_name}"
         
-        self.setWindowTitle('CDS ESUS v5.3')
-        self.setGeometry(100, 100, 600, 450)
+        # Garante que não adicionamos "dist" ou "site-packages" se estiver em caminhos temporários
+        if "dist" in app_path or "site-packages" in app_path:
+             extra_title_info = "" # Limpa se for um caminho de compilação ou venv
+
+        self.setWindowTitle(f'CDS ESUS v5.3.3c{extra_title_info}')
+        self.setGeometry(100, 100, 400, 350) #antes 500 x 350
         palette = self.palette()
         palette.setColor(QPalette.Window, QColor(240, 242, 245))
         self.setPalette(palette)
 
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout() # Layout principal vertical
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(40)
+        main_layout.setSpacing(10)
 
-        title_label = QLabel('CDS DIGT <span style="font-weight:bold; color:#4C72E0;">v5.3</span>')
+        title_label = QLabel('CDS DIGT <span style="font-weight:bold; color:#4C72E0;">v5.3.3c</span>')
         title_label.setFont(QFont('Segoe UI', 28, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setTextFormat(Qt.RichText)
@@ -74,14 +101,14 @@ class MainWindow(QWidget):
         main_layout.addWidget(subtitle_label)
 
         content_grid = QGridLayout()
-        content_grid.setHorizontalSpacing(30)
-        content_grid.setVerticalSpacing(30)
+        content_grid.setHorizontalSpacing(15) # Espaçamento horizontal entre colunas
+        content_grid.setVerticalSpacing(15) # Espaçamento vertical entre linhas
         content_grid.setAlignment(Qt.AlignCenter)
 
         # --- CARD TAREFA ---
         task_card = QFrame()
-        task_card.setFixedWidth(300)
-        task_card.setMinimumWidth(300)
+        task_card.setFixedWidth(250)
+        task_card.setMinimumWidth(250)
         task_card.setMinimumHeight(240)
         task_card.setMaximumHeight(300)
         task_card.setStyleSheet("""
@@ -145,8 +172,8 @@ class MainWindow(QWidget):
 
         # --- CARD DATA ---
         date_card = QFrame()
-        date_card.setFixedWidth(300)
-        date_card.setMinimumWidth(300)
+        date_card.setFixedWidth(250)
+        date_card.setMinimumWidth(250)
         date_card.setMinimumHeight(240)
         date_card.setMaximumHeight(300)
         date_card.setStyleSheet("""
@@ -166,7 +193,7 @@ class MainWindow(QWidget):
         date_label.setFont(QFont('Segoe UI', 11))
         date_layout.addWidget(date_label)
         row_date_layout = QHBoxLayout()
-        row_date_layout.setSpacing(10)
+        row_date_layout.setSpacing(5)
         self.data_edit = QLineEdit()
         self.data_edit.setInputMask("99/99/9999")
         self.data_edit.setFont(QFont('Segoe UI', 11))
@@ -198,7 +225,7 @@ class MainWindow(QWidget):
 
         # --- CARD AÇÕES ---
         action_card = QFrame()
-        action_card.setStyleSheet("QFrame { background-color: white; border-radius: 20px; padding: 30px; }")
+        action_card.setStyleSheet("QFrame { background-color: white; border-radius: 10px; padding: 10px; }")
         action_layout = QVBoxLayout(action_card)
         action_layout.setSpacing(5)
 
@@ -208,12 +235,19 @@ class MainWindow(QWidget):
         self.checkboxDeleteFile.stateChanged.connect(self.on_checkbox_delete_changed)
         self.checkboxDeleteFile.setFont(QFont('Segoe UI', 11))
 
+        # --- Alternar entre Firefox/Chrome ---
+        self.checkbox_use_chrome = QCheckBox("Usar Navegador Chrome")
+        self.checkbox_use_chrome.setFont(QFont('Segoe UI', 11))
+        self.checkbox_use_chrome.stateChanged.connect(self.on_checkbox_use_chrome_changed)
+        action_layout.addWidget(self.checkbox_use_chrome) # Adiciona ao layout do CARD AÇÕES
+
+
         action_layout.addWidget(self.checkbox_manual_login)
         action_layout.addWidget(self.checkboxDeleteFile)
 
         self.btn_start_automation = QPushButton("Iniciar Automação")
         self.btn_start_automation.setFont(QFont('Segoe UI', 14, QFont.Bold))
-        self.btn_start_automation.setFixedSize(300, 60)
+        self.btn_start_automation.setFixedSize(200, 60)
         self.btn_start_automation.clicked.connect(self.start_automation) # Conecta ao novo método de iniciar
         self.btn_start_automation.setStyleSheet("""
             QPushButton {
@@ -226,7 +260,7 @@ class MainWindow(QWidget):
 
         # --- Botão Sair ---
         self.btn_exit = QPushButton("Sair")
-        self.btn_exit.setFixedSize(150, 45)
+        self.btn_exit.setFixedSize(100, 35)
         self.btn_exit.setFont(QFont('Segoe UI', 11, QFont.DemiBold))
         self.btn_exit.clicked.connect(self.exit_app)
         action_layout.addWidget(self.btn_exit, alignment=Qt.AlignCenter)
@@ -240,7 +274,7 @@ class MainWindow(QWidget):
         copyright.setFont(QFont('Segoe UI', 10))
         version_pec = QLabel('PEC: <span style="color:green;">Versão 5.4.11</span>')
         version_pec.setTextFormat(Qt.RichText)
-        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3</span>')
+        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3.2</span>')
         version_app.setTextFormat(Qt.RichText)
         footer.addWidget(copyright)
         footer.addStretch()
@@ -251,6 +285,11 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
         self._set_ui_enabled(True) # Garante que a UI comece habilitada
+
+    def on_checkbox_use_chrome_changed(self, state):
+        """Slot para salvar a configuração do checkbox 'Usar Navegador Chrome'."""
+        self._use_chrome_browser = (state == Qt.Checked)
+        logger.info(f"Config 'Usar Navegador Chrome': {self._use_chrome_browser}")
 
     def _load_initial_date(self):
         """Carrega a data salva em data.csv ao iniciar o app."""
@@ -427,6 +466,10 @@ class MainWindow(QWidget):
         is_manual_login = self.checkbox_manual_login.isChecked() # <-- NOVO
         logger.info(f"Modo de Login Manual: {'Ativado' if is_manual_login else 'Desativado'}") # <-- NOVO
 
+        # --- NOVO: OBTÉM O ESTADO DO CHECKBOX DO NAVEGADOR ---
+        use_chrome = self.checkbox_use_chrome.isChecked() # Pega o estado atual
+        logger.info(f"Usar Navegador Chrome: {'Sim' if use_chrome else 'Não (Firefox)'}")
+
         # Se tudo estiver OK, iniciar a thread
         logger.info(f"Iniciando automação para a tarefa '{selected_task_name}'...")
         self._set_ui_enabled(False) # Desabilita a UI durante a automação
@@ -434,7 +477,8 @@ class MainWindow(QWidget):
         # Cria a thread de trabalho
         self._automation_thread = QThread()
         # Cria o objeto Worker e o move para a thread
-        self._automation_worker = Worker(selected_task_name, manual_login=is_manual_login)
+        # self._automation_worker = Worker(selected_task_name, manual_login=is_manual_login)
+        self._automation_worker = Worker(selected_task_name, manual_login=is_manual_login, use_chrome_browser=use_chrome)
         self._automation_worker.moveToThread(self._automation_thread)
 
         # Conecta sinais do Worker aos slots na MainWindow
@@ -453,6 +497,7 @@ class MainWindow(QWidget):
         # Conecta o sinal finished do Worker a um método na MainWindow para lidar com o resultado
         self._automation_worker.finished.connect(self.on_automation_finished)
 
+        self.user_action_signal.connect(self._automation_worker._handle_user_action_signal)
         # Inicia a thread
         self._automation_thread.start()
         logger.info("Thread de automação iniciada.")

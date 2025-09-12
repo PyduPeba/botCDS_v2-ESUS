@@ -3,7 +3,7 @@ import asyncio
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
 from app.core.logger import logger
-from app.automation.error_handler import AutomationErrorHandler
+from app.automation.error_handler import AutomationErrorHandler, SkipRecordException, AbortAutomationException
 from app.core.errors import AutomationError
 from app.core.utils import normalize_text_for_selection
 import re # Pode ser útil para procurar labels por texto parcial ou case-insensitive
@@ -166,9 +166,20 @@ class AtendimentoForm(BasePage):
                 raise AutomationError(f"Condição Avaliada '{condicao}' não encontrada na lista.")
 
 
+        except (AutomationError, SkipRecordException, AbortAutomationException) as e:
+            logger.debug(f"Propagando exceção de controle/automação de select_condicao_avaliada: {e}")
+            raise e
         except Exception as e:
-            logger.error(f"Erro durante seleção da Condição Avaliada '{condicao}': {e}")
-            raise AutomationError(f"Falha ao selecionar Condição Avaliada '{condicao}'.")  from e
+            # Este é um erro verdadeiramente inesperado que nenhuma das chamadas _safe_X ou blocos internos trataram.
+            logger.critical(f"Erro inesperado durante seleção da Condição Avaliada '{condicao}': {e}", exc_info=True)
+            # Ainda chama o handler para feedback ao usuário
+            user_action = await self._handler.handle_error(e, step_description=f"Erro inesperado na seleção de Condição Avaliada '{condicao}'")
+            if user_action == "continue":
+                # Se o usuário escolheu continuar, re-lança AutomationError para sinalizar ao BaseTask para retentar o registro completo.
+                raise AutomationError(f"Retentando registro devido a erro inesperado na seleção de Condição Avaliada '{condicao}' após intervenção manual.") from e
+            # Se o usuário escolheu skip/abort, o handler já levantou essas exceções.
+            # Se for outro caso não coberto (o que seria raro), re-lança como um AutomationError fatal.
+            raise AutomationError(f"Falha ao selecionar Condição Avaliada '{condicao}' devido a erro não recuperável.") from e
         
 
     async def fill_ciap(self, iframe_frame: Locator, ciap_code: str):

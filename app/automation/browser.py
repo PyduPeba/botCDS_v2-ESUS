@@ -2,6 +2,8 @@
 from playwright.async_api import async_playwright, BrowserContext, Page, Browser
 from app.core.logger import logger
 from app.core.errors import AutomationError
+from pathlib import Path
+import asyncio
 
 class BrowserManager:
     """
@@ -13,20 +15,23 @@ class BrowserManager:
         self._context: BrowserContext = None
         self._page: Page = None
 
-    async def launch_browser(self, headless=False) -> Page:
+    async def launch_browser(self, headless=False, enable_trace: bool = True, use_chrome: bool = False) -> Page:
         """
         Inicia o navegador Playwright e cria um novo contexto e página.
         Retorna a instância da página.
         """
-        logger.info(f"Lançando navegador Playwright (headless={headless})...")
+        logger.info(f"Lançando navegador Playwright (headless={headless}, Chrome={use_chrome})...")
         try:
             self._playwright = await async_playwright().start()
-            # Use 'chromium' para Chrome, 'firefox', ou 'webkit' para Safari
-            self._browser = await self._playwright.chromium.launch(headless=headless)
-            self._context = await self._browser.new_context()
-
-            # Adicione opções de contexto se precisar (ex: permissões, user agent)
-            # self._context = await self._browser.new_context(permissions=['clipboard-read', 'clipboard-write'])
+            
+            # --- Lógica Condicional para Chrome/Firefox ---
+            if use_chrome:
+                logger.info("Tentando lançar Google Chrome...")
+                self._browser = await self._playwright.chromium.launch(headless=headless, channel="chrome")
+            else:
+                logger.info("Tentando lançar Mozilla Firefox (padrão)...")
+                self._browser = await self._playwright.firefox.launch(headless=headless) # Usando Firefox por padrão
+            self._context = await self._browser.new_context() # Contexto padrão sem vídeo
 
             self._page = await self._context.new_page()
 
@@ -60,22 +65,3 @@ class BrowserManager:
                 logger.info("Playwright parado.")
             except Exception as e:
                  logger.error(f"Erro ao parar Playwright: {e}")
-
-
-# Exemplo de uso (somente para teste do módulo)
-# if __name__ == '__main__':
-#     import asyncio
-
-#     async def test_browser():
-#         manager = BrowserManager()
-#         try:
-#             page = await manager.launch_browser(headless=False) # Mude para True para não abrir a janela
-#             await page.goto("https://playwright.dev")
-#             logger.info(f"Página atual: {page.url}")
-#             await asyncio.sleep(3) # Espera um pouco para ver a página
-#         except AutomationError as e:
-#             logger.error(f"Teste falhou: {e}")
-#         finally:
-#             await manager.close_browser()
-
-#     asyncio.run(test_browser())

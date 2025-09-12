@@ -6,6 +6,7 @@ from app.core.errors import AutomationError # Importamos nossas exceções perso
 from pathlib import Path
 import traceback # Para obter o stack trace do erro
 from datetime import datetime # Importa datetime
+from playwright._impl._errors import TargetClosedError
 
 
 class AutomationErrorHandler:
@@ -13,6 +14,7 @@ class AutomationErrorHandler:
     Gerencia erros durante a automação, permitindo pausar, continuar ou pular.
     """
     def __init__(self, page: Page, pause_callback=None):
+        super().__init__() # Adicionado super().__init__() para QObject base, embora aqui não seja QObject.
         self._page = page # A instância da página Playwright
         self._is_paused = False
         self._pause_event = asyncio.Event() # Evento para pausar/retomar a execução asyncio
@@ -23,27 +25,37 @@ class AutomationErrorHandler:
         self._error_screenshots_dir = Path("error_screenshots")
         self._error_screenshots_dir.mkdir(parents=True, exist_ok=True) # Cria a pasta se não existir
 
-    async def handle_error(self, e: Exception, step_description: str = "Passo desconhecido", data_row=None):
-        """
-        Processa um erro capturado, registra detalhes e entra em estado de pausa.
-        Esta função é assíncrona porque pode precisar esperar por um evento de asyncio.
-        """
-        logger.error(f"Erro capturado durante o passo: '{step_description}'", exc_info=True) # exc_info=True printa o stack trace
+    async def handle_error(self, e: Exception, step_description: str = "Passo desconhecido", data_row=None) -> str:
+        logger.error(f"Erro capturado durante o passo: '{step_description}'", exc_info=True)
         screenshot_path = None
-
+        
+        # --- INÍCIO DA MODIFICAÇÃO PARA CHECAR `TargetClosedError` ---
+        is_page_closed = False
+        # Verifique se a exceção original já é um TargetClosedError
+        if isinstance(e, TargetClosedError):
+            is_page_closed = True
+            logger.warning(f"Erro original é TargetClosedError. A página já está fechada.")
+        elif self._page and self._page.is_closed(): # Verifica se a página já está marcada como fechada
+            is_page_closed = True
+            logger.warning("Page.is_closed() retornou True. A página está fechada.")
+        
         try:
-            # Tenta tirar um screenshot
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            screenshot_filename = f"error_{timestamp}.png"
-            screenshot_path = self._error_screenshots_dir / screenshot_filename
-            await self._page.screenshot(path=screenshot_path)
-            logger.info(f"Screenshot de erro salvo em: {screenshot_path}")
+            if not is_page_closed: # Tente tirar screenshot apenas se a página não estiver fechada
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                screenshot_filename = f"error_{timestamp}.png"
+                screenshot_path = self._error_screenshots_dir / screenshot_filename
+                await self._page.screenshot(path=screenshot_path)
+                logger.info(f"Screenshot de erro salvo em: {screenshot_path}")
+        except TargetClosedError as screenshot_e:
+            is_page_closed = True # Confirma que foi fechado durante a tentativa de screenshot
+            logger.error(f"Não foi possível tirar screenshot de erro: Page/Context já fechado ({screenshot_e})")
+            screenshot_path = "Não disponível (Target Closed)"
         except Exception as screenshot_e:
-            logger.error(f"Não foi possível tirar screenshot de erro: {screenshot_e}")
-            screenshot_path = "Não disponível" # Marca como não disponível
+            logger.error(f"Não foi possível tirar screenshot de erro: {screenshot_e}", exc_info=True)
+            screenshot_path = "Não disponível"
+        # --- FIM DA MODIFICAÇÃO PARA CHECAR `TargetClosedError` ---
 
         # Cria a exceção personalizada com os detalhes do erro
-        # Incluímos o stack trace original na mensagem para melhor depuração
         error_message = f"{e}\nOriginal Stack Trace:\n{traceback.format_exc()}"
         self._last_error = AutomationError(
             message=error_message,
@@ -55,74 +67,66 @@ class AutomationErrorHandler:
         self._is_paused = True
         logger.warning("Automação pausada devido ao erro.")
 
-        # Notifica a GUI sobre o erro e a pausa
-        if self._pause_callback:
-             # Chamamos o callback. A GUI (Worker) deve esperar pela resposta do usuário.
-             # O callback deve retornar a ação desejada (continue, skip, abort)
-             action = await self._pause_callback(self._last_error)
-             logger.info(f"GUI solicitou ação: {action}")
+        action = "abort" # Ação padrão
+        # Se a página está fechada, não há como continuar, força abortar.
+        if is_page_closed:
+            logger.critical("Browser/Page está fechado. Forçando ABORTAR Automação, pois não é possível continuar.")
+            action = "abort"
+        else:
+            if self._pause_callback:
+                 action = await self._pause_callback(self._last_error)
+                 logger.info(f"GUI solicitou ação: {action}")
 
-             if action == "continue":
-                 self._is_paused = False # Remove o estado de pausa
-                 self._pause_event.set() # Sinaliza para continuar
-             elif action == "skip":
-                 self._is_paused = False # Remove o estado de pausa
-                 self._pause_event.set() # Sinaliza para continuar (o TaskRunner lidará com o 'skip')
-                 # Poderíamos levantar uma exceção específica aqui para o TaskRunner pegar
-                 raise SkipRecordException("Solicitado pular registro pelo usuário.") # Usaremos uma nova exceção
-             elif action == "abort":
-                 self._is_paused = False # Remove o estado de pausa
-                 self._pause_event.set() # Sinaliza para continuar (o TaskRunner lidará com o 'abort')
-                 # Poderíamos levantar uma exceção específica aqui
-                 raise AbortAutomationException("Automação abortada pelo usuário.") # Usaremos uma nova exceção
-             else:
-                 logger.error(f"Ação desconhecida recebida do callback: {action}. Abortando.")
-                 raise AbortAutomationException("Ação de controle desconhecida.")
+        # Com base na ação do usuário, ou levantamos uma exceção de controle ou retornamos "continue"
+        if action == "continue":
+            self._is_paused = False # Remove o estado de pausa
+            self._pause_event.set() # Sinaliza para continuar
+            return "continue" # Retorna explicitamente "continue"
+        elif action == "skip":
+            self._is_paused = False # Remove o estado de pausa
+            self._pause_event.set() # Sinaliza para continuar (o TaskRunner lidará com o 'skip')
+            raise SkipRecordException("Solicitado pular registro pelo usuário.")
+        elif action == "abort":
+            self._is_paused = False # Remove o estado de pausa
+            self._pause_event.set() # Sinaliza para continuar (o TaskRunner lidará com o 'abort')
+            raise AbortAutomationException("Automação abortada pelo usuário.")
+        else:
+            logger.error(f"Ação desconhecida recebida do callback: {action}. Abortando.")
+            raise AbortAutomationException("Ação de controle desconhecida.")
 
-
-        # Se não houver callback, o robô fica pausado até que alguém chame resume() externamente
-        # await self._pause_event.wait() # Espera até que o evento seja setado externamente (menos ideal para integração GUI)
-
-
+    # Os métodos `resume`, `skip_record` e `abort` permanecem inalterados.
     def resume(self):
-        """Retoma a execução da automação (chamado pela GUI/Worker)."""
         if self._is_paused:
             self._is_paused = False
-            self._last_error = None # Limpa o último erro
-            self._pause_event.set() # Sinaliza para continuar
-            self._pause_event.clear() # Limpa o evento para a próxima pausa
+            self._last_error = None
+            self._pause_event.set()
+            self._pause_event.clear()
             logger.info("Automação retomada.")
         else:
             logger.warning("Tentativa de retomar automação que não estava pausada.")
 
     def skip_record(self):
-        """Sinaliza para pular o registro atual (chamado pela GUI/Worker)."""
         if self._is_paused:
              self._is_paused = False
              self._last_error = None
-             self._pause_event.set() # Sinaliza para continuar
+             self._pause_event.set()
              self._pause_event.clear()
              logger.info("Solicitado pular registro.")
-             # O TaskRunner precisa capturar isso. Poderíamos usar uma exceção interna ou estado.
-             # Uma exceção é mais limpa para interromper a lógica atual.
-             raise SkipRecordException("Pular registro solicitado.") # Levanta uma exceção interna
-
+             raise SkipRecordException("Pular registro solicitado.")
         else:
              logger.warning("Tentativa de pular registro em automação que não estava pausada.")
 
-
     def abort(self):
-        """Sinaliza para abortar a automação (chamado pela GUI/Worker)."""
         if self._is_paused:
             self._is_paused = False
             self._last_error = None
-            self._pause_event.set() # Sinaliza para continuar
+            self._pause_event.set()
             self._pause_event.clear()
             logger.info("Automação abortada.")
-            # O TaskRunner precisa capturar isso.
-            raise AbortAutomationException("Automação abortada pelo usuário.") # Levanta uma exceção interna
+            raise AbortAutomationException("Automação abortada pelo usuário.")
         else:
             logger.warning("Tentativa de abortar automação que não estava pausada.")
+
 
 
     @property

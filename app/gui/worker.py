@@ -1,5 +1,6 @@
 # Arquivo: app/gui/worker.py
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
+from PyQt5.QtWidgets import QApplication
 import asyncio
 from app.automation.browser import BrowserManager
 from app.automation.error_handler import AutomationErrorHandler, AbortAutomationException
@@ -46,17 +47,29 @@ class Worker(QObject):
     """
     finished = pyqtSignal(str)
     request_error_dialog = pyqtSignal(object)
-    user_action_received = pyqtSignal(str)
+    # user_action_received = pyqtSignal(str)
 
-    def __init__(self, task_type: str, manual_login: bool):
+    def __init__(self, task_type: str, manual_login: bool, use_chrome_browser: bool):
         super().__init__(None)
         self._task_type = task_type
         self._manual_login = manual_login
+        self._use_chrome_browser = use_chrome_browser
         self._browser_manager = BrowserManager()
         self._error_handler: AutomationErrorHandler = None
         self._user_action_event = asyncio.Event()
         self._user_action = None
-        self.user_action_received.connect(self._handle_user_action_signal)
+        # self.user_action_received.connect(self._handle_user_action_signal)
+        logger.debug(f"Worker initialized for task '{task_type}'. user_action_received signal connected in Worker. Using Chrome: {use_chrome_browser}")
+    
+    # Este método agora é o SLOT direto para MainWindow.user_action_signal
+    def _handle_user_action_signal(self, action: str):
+        """
+        Slot que recebe a ação do usuário da GUI e libera o worker.
+        """
+        logger.info(f"Worker {id(self)}: Recebido sinal de ação do usuário no slot: {action}.")
+        self._user_action = action
+        self._user_action_event.set()
+        logger.debug(f"Worker {id(self)}: _user_action_event set for action '{action}'.")
 
     def run_automation(self):
         """
@@ -64,7 +77,11 @@ class Worker(QObject):
         """
         logger.info("Worker thread iniciada. Rodando loop asyncio...")
         try:
-            asyncio.run(self._async_run())
+            # É uma boa prática criar um novo loop de eventos para a QThread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self._async_run())
+            loop.close()
         except Exception as e:
             logger.critical(f"Exceção fatal no loop asyncio do Worker: {e}", exc_info=True)
             self.finished.emit(f"Erro fatal: {e}")
@@ -76,7 +93,7 @@ class Worker(QObject):
         page = None
         try:
             headless = False
-            page = await self._browser_manager.launch_browser(headless=headless)
+            page = await self._browser_manager.launch_browser(headless=headless, use_chrome=self._use_chrome_browser)
 
             self._error_handler = AutomationErrorHandler(page, pause_callback=self._request_gui_action)
 
@@ -123,6 +140,7 @@ class Worker(QObject):
             await self._browser_manager.close_browser()
             self.finished.emit(f"Erro inesperado e fatal: {e}")
 
+
     async def _request_gui_action(self, error: AutomationError) -> str:
         """
         Callback chamado pelo ErrorHandler. Emite um sinal para a GUI e espera a resposta.
@@ -131,14 +149,25 @@ class Worker(QObject):
         self._user_action_event.clear()
         self._user_action = None
         self.request_error_dialog.emit(error)
-        await self._user_action_event.wait()
-        logger.debug(f"Worker: Evento de ação do usuário recebido: {self._user_action}")
+        logger.debug("Worker: _request_gui_action emitted request_error_dialog. Waiting for user action event...")
+
+        # --- INÍCIO DA MODIFICAÇÃO CRÍTICA PARA PROCESSAR EVENTOS QT ---
+        # Enquanto o evento não for setado, processa eventos da Qt na thread do Worker
+        while not self._user_action_event.is_set():
+            app = QApplication.instance()
+            if app:
+                # Processa eventos do aplicativo principal. Isso pode incluir sinais
+                # direcionados a objetos nesta thread worker.
+                app.processEvents() 
+            else:
+                logger.error("QApplication instance not found in worker thread. Cannot process Qt events.")
+                # Se não há QApplication, não há como processar sinais Qt.
+                # Não podemos esperar aqui indefinidamente. Uma saída forçada pode ser necessária.
+                # Por enquanto, vamos apenas logar e dormir para evitar loop infinito de CPU.
+            
+            await asyncio.sleep(0.05) # Pequena pausa para não consumir CPU em excesso
+
+        logger.debug(f"Worker: _request_gui_action received user action event. Action: {self._user_action}")
         return self._user_action
 
-    def _handle_user_action_signal(self, action: str):
-        """
-        Slot que recebe a ação do usuário da GUI e libera o worker.
-        """
-        logger.info(f"Worker: Recebido sinal de ação do usuário: {action}.")
-        self._user_action = action
-        self._user_action_event.set()
+    

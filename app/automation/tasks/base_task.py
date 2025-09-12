@@ -246,100 +246,85 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
             logger.info(f"Execução da tarefa '{self.__class__.__name__}' concluída.")        
 
         except (AbortAutomationException, Exception) as e:
-            logger.error(f"Automação abortada ou erro fatal durante a tarefa '{self.__class__.__name__}': {e}")
-
+            logger.critical(f"Automação abortada ou erro fatal durante a tarefa '{self.__class__.__name__}': {e}", exc_info=True)
+            if not isinstance(e, (AbortAutomationException, SkipRecordException)):
+                raise AutomationError(f"Erro fatal inesperado no nível da tarefa: {e}") from e
+            raise
 
     # --- _process_all_rows AGORA RECEBE data_df COMO PARÂMETRO ---
-    async def _process_all_rows(self, data_df_this_file: pd.DataFrame): # Agora recebe o DataFrame como parâmetro
+    async def _process_all_rows(self, data_df_this_file: pd.DataFrame):
         """
         Itera sobre o DataFrame recebido e processa cada linha.
         Lida com pulo de registro e retentativa manual para process_row e clique Adicionar (entre registros).
         """
-        total_rows_this_file = len(data_df_this_file) # Usa o tamanho do DataFrame DESTE arquivo
+        total_rows_this_file = len(data_df_this_file)
 
-        for index, row in data_df_this_file.iterrows(): # Itera sobre o DataFrame DESTE arquivo
-            logger.info(f"Iniciando processamento do registro {index + 1}/{total_rows_this_file} do arquivo atual.") # Log ajustado
+        for index, row in data_df_this_file.iterrows():
+            logger.info(f"Iniciando processamento do registro {index + 1}/{total_rows_this_file} do arquivo atual.")
             data_row = [None if pd.isna(x) else x for x in row.tolist()]
 
-            # ** Loop de retentativa manual para process_row (preencher e confirmar) **
-            process_row_successful = False
-            while not process_row_successful:
-                 try:
-                     logger.debug(f"Tentativa para processar (preencher e confirmar) registro {index + 1}.")
-                     # Chama o método abstrato que a tarefa filha implementa (preenche e clica Confirmar)
-                     # process_row só retorna se o clique Confirmar for bem-sucedido e não gerar popup message-box
-                     await self.process_row(self._current_iframe_frame, data_row) # PREENCHE E CLICA CONFIRMAR
+            # ** NOVO LOOP DE RETENTATIVA PARA O REGISTRO COMPLETO (await self.process_row) **
+            record_processed_successfully = False
+            while not record_processed_successfully:
+                try:
+                    logger.debug(f"Tentativa para processar (preencher e confirmar) registro {index + 1}.")
+                    # Chama o método abstrato da tarefa filha (preenche e clica Confirmar)
+                    await self.process_row(self._current_iframe_frame, data_row)
+                    logger.info(f"Processamento da linha {index + 1} concluído com sucesso.")
+                    record_processed_successfully = True # Sucesso, sai deste loop while
 
-                     # ** SE CHEGOU AQUI, process_row FOI CONCLUÍDO COM SUCESSO REAL **
-                     # self._processed_count_total += 1 # Não incrementa aqui mais
-                     logger.info(f"Processamento da linha {index + 1} concluído com sucesso.")
-                     process_row_successful = True # Sucesso no process_row, sai deste loop while
+                except AutomationError as e:
+                    # Capturado quando o usuário clicou "Continuar" no ErrorDialog.
+                    # Isso significa que o usuário corrigiu algo e quer REFAZER ESTE REGISTRO.
+                    logger.warning(f"Erro recuperável para registro {index + 1} (usuário clicou 'Continuar'). Retentando o processamento COMPLETO do registro: {e}")
+                    # O loop 'while not record_processed_successfully' continuará para este mesmo registro.
+                    await asyncio.sleep(1) # Pequena pausa antes de retentar.
+                    # É CRÍTICO que o usuário tenha limpado os campos manualmente na UI,
+                    # pois `process_row` irá tentar preencher tudo do zero novamente.
 
+                except SkipRecordException:
+                    self._skipped_count_total += 1
+                    logger.warning(f"Registro {index + 1} pulado conforme solicitação do usuário.")
+                    record_processed_successfully = True # Pulado, sai deste loop while para ir para o próximo registro.
 
-                 except SkipRecordException:
-                     # Captura Skip no process_row (preenchimento/confirmar)
-                     self._skipped_count_total += 1 # Contagem total
-                     logger.warning(f"Registro {index + 1} pulado conforme solicitação do usuário.")
-                     process_row_successful = True # Pulado, sai deste loop while (e não tentará o clique Adicionar abaixo para esta linha)
+                except AbortAutomationException:
+                    logger.error(f"Automação abortada pelo usuário no registro {index + 1}.")
+                    raise # Re-levanta para sair do loop de arquivos principal.
 
-                 except AbortAutomationException:
-                     # Captura Abort no process_row
-                     logger.error(f"Automação abortada pelo usuário no registro {index + 1}.")
-                     raise # Re-levanta para sair do loop de registros principal (`for index, row in ...`)
-
-                 # ** TRATAMENTO GENÉRICO PARA EXCEÇÕES DENTRO DE process_row **
-                 except Exception as e:
-                      # Captura QUALQUER outra exceção que ocorra DENTRO de process_row.
-                      # O handle_error JÁ foi chamado e você interagiu (clicou "Continue").
-                      logger.error(f"Erro não tratado ou não recuperável em process_row para registro {index + 1}. Tentando novamente após possível correção manual: {e}")
-                      # O loop while (while not process_row_successful:) continuará.
-                      # Não faz nada aqui exceto logar. Não conta como skipped ainda.
-                      await asyncio.sleep(1) # Pausa antes de retentar o process_row
-
-
-            # ** Clicar no botão "Adicionar" para o próximo registro (SE process_row FOI BEM-SUCEDIDO E NÃO É O ÚLTIMO DESTE ARQUIVO) **
-            # Este bloco SÓ SERÁ EXECUTADO SE process_row_successful FOR TRUE (ou seja, não pulou nem abortou em process_row)
-            # E SE NÃO É O ÚLTIMO REGISTRO DO ARQUIVO ATUAL.
-            # Se for o ÚLTIMO registro DESTE arquivo, NÃO clica Adicionar.
-            if process_row_successful and index < total_rows_this_file - 1: # Usa total_rows_this_file na condição
-                 add_clicked_successful = False
-                 while not add_clicked_successful: # Loop de retentativa manual PARA O CLIQUE EM ADICIONAR
-                      try:
-                          logger.info(f"Registro {index + 1}/{total_rows_this_file} processado com sucesso. Tentando clicar em 'Adicionar' para o próximo registro ({index + 2}).")
-                          await self._main_menu.click_add_button_in_iframe(self._current_iframe_frame) # CLICA ADICIONAR ENTRE REGISTROS
-                          await asyncio.sleep(2) # Espera após o clique Adicionar
-                          add_clicked_successful = True # Sucesso no clique Adicionar
-                          # Incrementa o processed_count total APENAS após processar a linha E clicar Adicionar (se necessário e não for o último)
-                          self._processed_count_total += 1
+                except Exception as e:
+                    # Captura qualquer outra exceção inesperada dentro de process_row.
+                    logger.critical(f"Erro INESPERADO durante processamento do registro {index + 1}: {e}", exc_info=True)
+                    # Não podemos simplesmente continuar aqui, pois é um erro não gerenciado pelo handler.
+                    # É um erro fatal para este registro e possivelmente para a automação.
+                    raise AutomationError(f"Erro inesperado e fatal no processamento do registro {index + 1}. Abortando.") from e
 
 
-                      except SkipRecordException:
-                           # Captura Skip no clique Adicionar
-                           self._skipped_count_total += 1 # Contagem total
-                           logger.warning(f"Clique em 'Adicionar' após registro {index + 1} pulado conforme solicitação do usuário.")
-                           add_clicked_successful = True # Considera "sucesso" para sair deste loop while e ir para a próxima linha do CSV.
+            # --- Clicar no botão "Adicionar" para o próximo registro (SE process_row FOI BEM-SUCEDIDO E NÃO É O ÚLTIMO DESTE ARQUIVO) ---
+            if record_processed_successfully and index < total_rows_this_file - 1:
+                try:
+                    logger.info(f"Registro {index + 1}/{total_rows_this_file} processado com sucesso. Tentando clicar em 'Adicionar' para o próximo registro ({index + 2}).")
+                    await self._main_menu.click_add_button_in_iframe(self._current_iframe_frame) # CLICA ADICIONAR ENTRE REGISTROS
+                    await asyncio.sleep(2)
+                    self._processed_count_total += 1 # Incrementa apenas após o clique Adicionar bem-sucedido.
+                except AutomationError as e:
+                    # Se 'Adicionar' falha e o usuário clica 'Continuar', significa que ele resolveu o problema
+                    # do botão 'Adicionar' e quer que o fluxo siga para o próximo registro.
+                    logger.warning(f"Erro recuperável no clique em 'Adicionar' após registro {index + 1} (usuário clicou 'Continuar'). Assume-se correção manual. Prosseguindo para o próximo registro.")
+                    self._processed_count_total += 1 # Conta o registro anterior como processado, mesmo com um problema no "Adicionar" (assumindo que o usuário corrigiu).
+                    await asyncio.sleep(1) # Pequena pausa para o usuário ter tempo de corrigir.
+                except SkipRecordException:
+                    self._skipped_count_total += 1
+                    logger.warning(f"Clique em 'Adicionar' após registro {index + 1} pulado conforme solicitação do usuário.")
+                    self._processed_count_total += 1 # O registro anterior foi processado, mesmo que "Adicionar" tenha sido pulado.
+                except AbortAutomationException:
+                    logger.error(f"Automação abortada pelo usuário no clique em 'Adicionar' após registro {index + 1}.")
+                    raise
 
-                      except AbortAutomationException:
-                           # Captura Abort no clique Adicionar
-                           logger.error(f"Automação abortada pelo usuário no clique em 'Adicionar' após registro {index + 1}.")
-                           raise # Re-levanta para sair do loop principal
-
-
-                      # ** TRATAMENTO GENÉRICO PARA EXCEÇÕES DENTRO DO CLIQUE ADICIONAR **
-                      except Exception as e:
-                           # Captura QUALQUER outra exceção que ocorra DENTRO do try (APENAS o clique Adicionar).
-                           logger.error(f"Erro no clique em 'Adicionar' após registro {index + 1}. Tentando novamente após possível correção manual: {e}")
-                           # O loop while (while not add_clicked_successful:) continuará.
-                           await asyncio.sleep(1) # Pausa antes de retentar o clique Adicionar
-
-
-            # ** Se for o último registro deste arquivo (index == total_rows_this_file - 1) **
-            # Não clica Adicionar. O loop for index termina.
-            # Precisamos incrementar o processed_count para o último registro aqui.
-            if process_row_successful and index == total_rows_this_file - 1:
-                 # Incrementa o processed_count total para o último registro deste arquivo.
-                 self._processed_count_total += 1
-                 logger.info(f"Último registro ({index + 1}/{total_rows_this_file}) processado. Não clicando em 'Adicionar'.")
+            # --- Se for o último registro deste arquivo (index == total_rows_this_file - 1) ---
+            # Não clica Adicionar. O loop 'for index' termina.
+            if record_processed_successfully and index == total_rows_this_file - 1:
+                self._processed_count_total += 1
+                logger.info(f"Último registro ({index + 1}/{total_rows_this_file}) processado. Não clicando em 'Adicionar'.")
 
 
     @abstractmethod

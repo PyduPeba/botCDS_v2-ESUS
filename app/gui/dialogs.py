@@ -72,7 +72,7 @@ class ErrorDialog(QDialog):
         self.setLayout(layout)
 
         # Ajusta o tamanho inicial do diálogo
-        self.resize(800, 600) # Tamanho inicial, será ajustado pelo layout
+        self.resize(400, 300) # Tamanho inicial, será ajustado pelo layout
 
     def accept_continue(self):
         """Define o resultado como 'continue' e fecha o diálogo."""
