@@ -1,4 +1,5 @@
-# Arquivo: app/gui/worker.py
+# Arquivo: app/gui/worker.py - Version: 1c - Passa info UBS/User para ErrorDialo
+
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
 from PyQt5.QtWidgets import QApplication
 import asyncio
@@ -46,7 +47,7 @@ class Worker(QObject):
     Usa sinais para se comunicar com a GUI principal.
     """
     finished = pyqtSignal(str)
-    request_error_dialog = pyqtSignal(object)
+    request_error_dialog = pyqtSignal(object, dict)
     # user_action_received = pyqtSignal(str)
 
     def __init__(self, task_type: str, manual_login: bool, use_chrome_browser: bool):
@@ -94,7 +95,6 @@ class Worker(QObject):
         try:
             headless = False
             page = await self._browser_manager.launch_browser(headless=headless, use_chrome=self._use_chrome_browser)
-
             self._error_handler = AutomationErrorHandler(page, pause_callback=self._request_gui_action)
 
             # --- CORREÇÃO: A lógica de loop de arquivos foi removida daqui ---
@@ -141,14 +141,14 @@ class Worker(QObject):
             self.finished.emit(f"Erro inesperado e fatal: {e}")
 
 
-    async def _request_gui_action(self, error: AutomationError) -> str:
+    async def _request_gui_action(self, error: AutomationError, user_info: dict = None) -> str:
         """
         Callback chamado pelo ErrorHandler. Emite um sinal para a GUI e espera a resposta.
         """
         logger.info("Worker: Solicitando ação do usuário via GUI...")
         self._user_action_event.clear()
         self._user_action = None
-        self.request_error_dialog.emit(error)
+        self.request_error_dialog.emit(error, user_info)
         logger.debug("Worker: _request_gui_action emitted request_error_dialog. Waiting for user action event...")
 
         # --- INÍCIO DA MODIFICAÇÃO CRÍTICA PARA PROCESSAR EVENTOS QT ---

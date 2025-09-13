@@ -1,4 +1,4 @@
-#app/gui/main_window.py (VERSÃO v3a - Ajuste de Layout Data)
+# Arquivo: app/gui/main_window.py - Version: 1d - Passa info UBS/User para ErrorDialog
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QLineEdit, QPushButton, QCheckBox, QFrame, QGridLayout, QMessageBox
@@ -47,6 +47,10 @@ class MainWindow(QWidget):
         self._load_initial_date()
 
     def initUI(self):
+        #Atualização de Texto de Título de Versões ambos.
+        versao = "5.3.3d"
+        pec_versao = "5.4.11"
+
         """Configura a interface gráfica principal."""
         # Configurar a imagem de fundo (chame ANTES de configurar o layout principal se for manual)
         # Para uma abordagem mais PyQt-like, considere usar QPalette no futuro.
@@ -78,7 +82,7 @@ class MainWindow(QWidget):
         if "dist" in app_path or "site-packages" in app_path:
              extra_title_info = "" # Limpa se for um caminho de compilação ou venv
 
-        self.setWindowTitle(f'CDS ESUS v5.3.3c{extra_title_info}')
+        self.setWindowTitle(f'CDS ESUS v{versao}{extra_title_info}')
         self.setGeometry(100, 100, 400, 350) #antes 500 x 350
         palette = self.palette()
         palette.setColor(QPalette.Window, QColor(240, 242, 245))
@@ -88,7 +92,7 @@ class MainWindow(QWidget):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
 
-        title_label = QLabel('CDS DIGT <span style="font-weight:bold; color:#4C72E0;">v5.3.3c</span>')
+        title_label = QLabel(f'CDS DIGT <span style="font-weight:bold; color:#4C72E0;">v{versao}</span>')
         title_label.setFont(QFont('Segoe UI', 28, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setTextFormat(Qt.RichText)
@@ -272,9 +276,9 @@ class MainWindow(QWidget):
         footer = QHBoxLayout()
         copyright = QLabel("© 2025 Kʎɐꓘ")
         copyright.setFont(QFont('Segoe UI', 10))
-        version_pec = QLabel('PEC: <span style="color:green;">Versão 5.4.11</span>')
+        version_pec = QLabel(f'PEC: <span style="color:green;">Versão {pec_versao}</span>')
         version_pec.setTextFormat(Qt.RichText)
-        version_app = QLabel('App Version: <span style="color:#4461D7;">5.3.3c</span>')
+        version_app = QLabel(f'App Version: <span style="color:#4461D7;">{versao}</span>')
         version_app.setTextFormat(Qt.RichText)
         footer.addWidget(copyright)
         footer.addStretch()
@@ -513,17 +517,17 @@ class MainWindow(QWidget):
         # Se houver outros botões de iniciar tarefa, desabilitar todos eles
         # Se houver uma área de log, talvez habilitar (log_text_edit.setEnabled(True))
 
-    def handle_error_dialog_request(self, error_obj: object):
+    def handle_error_dialog_request(self, error_obj: object, user_info: dict = None):
         """
         Slot chamado pelo Worker (na thread principal) para exibir o diálogo de erro.
-        Recebe a instância da AutomationError.
+        Recebe a instância da AutomationError e as informações do usuário/UBS.
         """
         logger.warning("MainWindow: Recebido request_error_dialog signal. Exibindo diálogo...")
         # O objeto recebido pelo sinal é a instância da AutomationError
         error: AutomationError = error_obj
 
         # Exibe o diálogo modal. exec_() bloqueia A THREAD PRINCIPAL.
-        dialog = ErrorDialog(error, self) # Passa 'self' como parent
+        dialog = ErrorDialog(error, user_info, self) # Passa 'self' como parent
         result_code = dialog.exec_() # Bloqueia aqui
 
         # Quando o diálogo é fechado, obtém a ação escolhida pelo usuário

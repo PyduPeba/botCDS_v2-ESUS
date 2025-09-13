@@ -102,6 +102,18 @@ class BaseTask(ABC): # Herda de ABC para ser uma classe abstrata
                 await self._perform_pre_navigation_steps()
             # --- FIM DA NOVA LÓGICA ---
 
+            # --- INCLUSÃO AQUI: Chamar get_and_save_user_info ---
+            logger.info("Chamando método para capturar e salvar informações do usuário e UBS.")
+            try:
+                await self._main_menu.get_and_save_user_info()
+            except AutomationError as e:
+                logger.critical(f"Falha ao capturar e salvar informações do usuário/UBS: {e}. Abortando automação.")
+                raise AbortAutomationException(f"Falha na inicialização: {e.message}") from e
+            except (SkipRecordException, AbortAutomationException):
+                raise # Propaga abort/skip se vier de dentro da função
+            logger.info("Informações do usuário e UBS processadas.")
+            # --- FIM DA INCLUSÃO ---
+
             # --- Passo 2a. Navegação para a tela da Ficha (Atendimento ou Procedimento) ---
             # _navigate_to_task_area retorna o FrameLocator do iframe principal APÓS navegar no menu.
             # Esta navegação acontece UMA VEZ POR SESSÃO (não por arquivo).

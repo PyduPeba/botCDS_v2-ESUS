@@ -3,9 +3,11 @@ import asyncio
 from playwright.async_api import Page, Locator
 from app.automation.pages.base_page import BasePage
 from app.core.logger import logger
-from app.automation.error_handler import AutomationErrorHandler, AutomationError # Importa aqui
+from app.automation.error_handler import AutomationErrorHandler, AutomationError, SkipRecordException, AbortAutomationException # Importa aqui
 import time # Ainda usaremos time.sleep para pausas longas onde não há um elemento específico para esperar
 from playwright._impl._errors import TimeoutError # Importa TimeoutError para capturar específico
+import json
+from app.core.app_config import AppConfig
 
 class MainMenu(BasePage):
     """
@@ -33,8 +35,17 @@ class MainMenu(BasePage):
     _TYPE_FICHA_OPTIONS_SELECTOR = '.alguma-classe-do-item-de-menu' # Placeholder
     _FINALIZE_RECORDS_BUTTON_SELECTOR = 'button:has-text("Finalizar registros")'
 
+    # --- NOVOS SELETORES PARA CAPTURAR INFORMAÇÕES DO USUÁRIO E UBS ---
+    _USER_NAME_SELECTOR = 'div.css-vy5qqd p.css-1ejlzhz' # Selector para o nome do profissional
+    _UBS_NAME_SELECTOR = 'div.css-vy5qqd div.css-150qhdu p.css-qk00ku' # Selector para o nome da UBS
+    # O seletor para o código da UBS (ACUDE DOS PINHEIROS) está na div.css-glh0q2
+    _UBS_CODE_SELECTOR = 'div.css-vy5qqd div.css-glh0q2 p.css-qk00ku' # Selector para o código da UBS
+    # --- FIM NOVOS SELETORES ---
+
     def __init__(self, page: Page, error_handler: AutomationErrorHandler):
         super().__init__(page, error_handler)
+
+    
 
     async def _click_center_of_page(self, step_description: str = "Clicar no centro da tela"):
         """Mover mouse e clicar no centro da página para tentar fechar popups/menus."""
@@ -347,6 +358,72 @@ class MainMenu(BasePage):
          finalize_button_locator = iframe_frame.locator(self._FINALIZE_RECORDS_BUTTON_SELECTOR)
          logger.info("Clicando no botão 'Finalizar registros' dentro do iframe.")
          await self._safe_click(finalize_button_locator, "Botão 'Finalizar registros' no Iframe")
+
+    async def get_and_save_user_info(self):
+        """
+        Captura o nome do profissional e da unidade (UBS) da página e os salva em um arquivo JSON.
+        """
+        logger.info("Tentando capturar nome do profissional e da unidade para salvar em name_UBS.json.")
+        user_name = "Não encontrado"
+        ubs_name = "Não encontrada"
+        ubs_code = "Não encontrado" # Adicionado para o 'ACUDE DOS PINHEIROS'
+
+        try:
+            # Capturar Nome do Profissional
+            user_name_locator = self._page.locator(self._USER_NAME_SELECTOR)
+            # Use _safe_wait_for_locator para aguardar o elemento
+            await self._safe_wait_for_locator(user_name_locator, timeout=10000, step_description="Nome do Profissional")
+            user_name = await user_name_locator.inner_text()
+            user_name = user_name.strip()
+            logger.info(f"Nome do Profissional capturado: '{user_name}'")
+
+            # Capturar Nome Completo da UBS (e.g., Unidade Basica de Saude da Familia Acude dos Pinheiros)
+            ubs_name_locator = self._page.locator(self._UBS_NAME_SELECTOR)
+            await self._safe_wait_for_locator(ubs_name_locator, timeout=10000, step_description="Nome Completo da UBS")
+            ubs_name = await ubs_name_locator.inner_text()
+            ubs_name = ubs_name.strip()
+            logger.info(f"Nome completo da UBS capturado: '{ubs_name}'")
+
+            # Capturar Código/Nome Curto da UBS (e.g., ACUDE DOS PINHEIROS)
+            ubs_code_locator = self._page.locator(self._UBS_CODE_SELECTOR)
+            await self._safe_wait_for_locator(ubs_code_locator, timeout=10000, step_description="Código/Nome Curto da UBS")
+            ubs_code = await ubs_code_locator.inner_text()
+            ubs_code = ubs_code.strip()
+            logger.info(f"Código/Nome curto da UBS capturado: '{ubs_code}'")
+
+
+        except (AutomationError, SkipRecordException, AbortAutomationException):
+            # Se um _safe_X lançou essas exceções, re-lança para ser tratado no nível da BaseTask
+            raise
+        except Exception as e:
+            logger.error(f"Erro inesperado ao capturar informações do usuário/UBS: {e}", exc_info=True)
+            # Chama o handler. Se o usuário clicar 'continuar', re-lança AutomationError para que BaseTask retente.
+            user_action = await self._handler.handle_error(e, step_description="Capturar nome do profissional/UBS.")
+            if user_action == "continue":
+                raise AutomationError("Retentando captura de informações do usuário/UBS após intervenção manual.") from e
+            # Se o usuário escolheu skip/abort, o handler já levantou essas exceções.
+
+        # Salvar as informações em JSON
+        info_data = {
+            "nome_profissional": user_name,
+            "nome_ubs_completo": ubs_name,
+            "nome_ubs_curto": ubs_code, # Adicionado o nome curto da UBS
+            "data_captura": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        config_dir = AppConfig.BASE_DIR / "resources" / "config"
+        config_dir.mkdir(parents=True, exist_ok=True) # Garante que o diretório exista
+        file_path = config_dir / "name_UBS.json"
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(info_data, f, ensure_ascii=False, indent=4)
+            logger.info(f"Informações do usuário e UBS salvas com sucesso em '{file_path}'.")
+        except Exception as e:
+            logger.critical(f"Erro ao salvar informações do usuário e UBS em JSON: {e}", exc_info=True)
+            # Este erro é crítico para a persistência. Não há como retentar facilmente aqui.
+            raise AutomationError(f"Falha crítica ao salvar name_UBS.json: {e}") from e
+    # --- FIM NOVO MÉTODO ---
 
 
     # Note: Mudar de volta para o conteúdo principal é feito implicitamente

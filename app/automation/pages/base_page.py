@@ -126,6 +126,18 @@ class BasePage:
             # Uma alternativa seria o handle_error levantar SEMPRE AutomationError,
             # e o TaskRunner capturar apenas AutomationError, SkipRecordException, AbortAutomationException.
             # Vamos seguir com a segunda abordagem: handle_error levanta suas exceções de controle.
+        
+    async def _safe_wait_for_locator(self, locator: Locator, state="visible", timeout=10000, step_description: str = None):
+        """Espera por um Locator específico com tratamento de erro."""
+        desc = step_description if step_description else f"Esperar por locator: {locator.locator}"
+        logger.debug(f"Tentando esperar por: {desc}")
+        try:
+            await locator.wait_for(state=state, timeout=timeout)
+            logger.debug(f"Locator encontrado: {desc}")
+        except Exception as e:
+            user_action = await self._handler.handle_error(e, step_description=f"Esperar por: {desc}")
+            if user_action == "continue":
+                raise AutomationError(f"Retentando registro devido à espera por '{desc}' após intervenção manual.") from e
 
     async def _safe_goto(self, url: str, step_description: str = "Navegar para URL"):
          """Navega para uma URL com tratamento de erro."""

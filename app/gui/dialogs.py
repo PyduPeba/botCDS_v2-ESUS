@@ -1,23 +1,25 @@
-# Arquivo: app/gui/dialogs.py
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QApplication, QWidget)
+# Arquivo: app/gui/dialogs.py - Version: 1f - Layout UBS/User Correto
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QGroupBox, QWidget)
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt, QByteArray, QBuffer, QIODevice, QTimer
 from app.core.errors import AutomationError # Importamos nossa exceção de erro
 
 import base64 # Para encodar a imagem em base64 se necessário (alternativa a caminho de arquivo)
 from pathlib import Path
+import json
+from app.core.app_config import AppConfig
 
 class ErrorDialog(QDialog):
     """
     Diálogo exibido quando um erro de automação ocorre e a automação é pausada.
     Permite ao usuário escolher entre Continuar, Pular Registro ou Abortar Automação.
     """
-    def __init__(self, error: AutomationError, parent=None):
+    def __init__(self, error: AutomationError, user_info: dict = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Erro de Automação Detectado")
         self.setModal(True) # Torna a janela modal (bloqueia outras interações na janela principal)
         # ** ADICIONA FLAGS PARA FICAR NO TOPO **
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.WindowMinMaxButtonsHint)
         # Pode adicionar outras flags como remover botões de minimizar/maximizar se quiser uma janela mais simples
         # self.setWindowFlags(self.windowFlags() | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
 
@@ -25,9 +27,33 @@ class ErrorDialog(QDialog):
 
         layout = QVBoxLayout()
 
+        header_layout = QHBoxLayout()
+
         # Mensagem de erro
         error_message_label = QLabel(f"Um erro ocorreu durante a automação:")
         layout.addWidget(error_message_label)
+        
+        if user_info:
+            # Cria o layout vertical para os dados
+            user_ubs_info_layout = QVBoxLayout()
+
+            # Label da UBS
+            ubs_label = QLabel(f"<b>UBS:</b> {user_info.get('nome_ubs_curto', 'N/A')}")
+            ubs_label.setTextFormat(Qt.RichText)
+            user_ubs_info_layout.addWidget(ubs_label)
+
+            # Label do Usuário
+            user_label = QLabel(f"<b>Profissional:</b> {user_info.get('nome_profissional', 'N/A')}")
+            user_label.setTextFormat(Qt.RichText)
+            user_ubs_info_layout.addWidget(user_label)
+
+            # Cria um GroupBox para agrupar os dados
+            group_box = QGroupBox("Informações do Usuário")
+            group_box.setLayout(user_ubs_info_layout)
+
+            # Adiciona o grupo ao layout principal
+            layout.addWidget(group_box)
+            layout.addWidget(QLabel(""))  # Espaçador visual (opcional)
 
         # Campo de texto para mostrar os detalhes do erro
         self.error_details_textedit = QTextEdit()

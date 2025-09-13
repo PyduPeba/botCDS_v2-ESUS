@@ -1,4 +1,4 @@
-# Arquivo: app/automation/error_handler.py
+# Arquivo: app/automation/error_handler.py - Version: 1c - Carrega info UBS/User para ErrorDialog
 import asyncio
 from playwright.async_api import Page
 from app.core.logger import logger
@@ -7,6 +7,8 @@ from pathlib import Path
 import traceback # Para obter o stack trace do erro
 from datetime import datetime # Importa datetime
 from playwright._impl._errors import TargetClosedError
+import json
+from app.core.app_config import AppConfig
 
 
 class AutomationErrorHandler:
@@ -20,10 +22,22 @@ class AutomationErrorHandler:
         self._pause_event = asyncio.Event() # Evento para pausar/retomar a execução asyncio
         self._pause_callback = pause_callback # Callback para notificar a GUI (fornecido pelo worker)
         self._last_error: AutomationError = None # Armazena o último erro capturado
-
-        # Define um diretório para salvar screenshots de erros
-        self._error_screenshots_dir = Path("error_screenshots")
+        self._error_screenshots_dir = Path("error_screenshots") # Define um diretório para salvar screenshots de erros
         self._error_screenshots_dir.mkdir(parents=True, exist_ok=True) # Cria a pasta se não existir
+    
+    def _load_user_ubs_info(self) -> dict:
+        """Carrega as informações do usuário e UBS do arquivo name_UBS.json."""
+        file_path = AppConfig.BASE_DIR / "resources" / "config" / "name_UBS.json"
+        if file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Erro ao carregar name_UBS.json: {e}", exc_info=True)
+                return {}
+        else:
+            logger.warning(f"Arquivo name_UBS.json não encontrado em: {file_path}")
+            return {}
 
     async def handle_error(self, e: Exception, step_description: str = "Passo desconhecido", data_row=None) -> str:
         logger.error(f"Erro capturado durante o passo: '{step_description}'", exc_info=True)
@@ -74,7 +88,8 @@ class AutomationErrorHandler:
             action = "abort"
         else:
             if self._pause_callback:
-                 action = await self._pause_callback(self._last_error)
+                 user_info = self._load_user_ubs_info()
+                 action = await self._pause_callback(self._last_error, user_info)
                  logger.info(f"GUI solicitou ação: {action}")
 
         # Com base na ação do usuário, ou levantamos uma exceção de controle ou retornamos "continue"
