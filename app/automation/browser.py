@@ -59,6 +59,7 @@ class BrowserManager:
             self._context = await self._browser.new_context() # Contexto padrão sem vídeo
 
             self._page = await self._context.new_page()
+            
 
             # Adicione um listener para erros no console do navegador (opcional)
             self._page.on("console", lambda msg: logger.debug(f"Browser console [{msg.type}]: {msg.text}"))
