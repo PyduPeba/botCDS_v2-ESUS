@@ -41,10 +41,12 @@ class AtendimentoMamografiaTask(BaseTask):
 
         tipo_atendimento = "Consulta agendada"
         condicao_avaliada_text = "Saúde sexual e reprodutiva" # Fixed text for this task
-        rastreamento_label = "Câncer de mama"
+        # rastreamento_label = "Câncer de mama"
+        rastreamento_label = "Câncer do colo do útero" # Overwrite to use Cervical Cancer as per original code
         conduta = row_data[7]
         
-        exame_sia_code = "0204030188" # Code or text for Citopatológico
+        # exame_sia_code = "0204030188" # Code or text for Citopatológico
+        exame_sia_code = "0203010086" # EXAME CITOPATOLÓGICO CERVICO VAGINAL/MICROFLORA-RASTREAMENTO
         status_sia = "S" # Status fixed for the SIA block
 
 

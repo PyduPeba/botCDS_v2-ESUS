@@ -13,6 +13,7 @@ botCDS_v2-ESUS
 │   │   ├── error_handler.py
 │   │   ├── pages
 │   │   │   ├── __init__.py
+│   │   │   ├── acs_form.py
 │   │   │   ├── atendimento_form.py
 │   │   │   ├── base_page.py
 │   │   │   ├── common_forms.py
@@ -21,9 +22,11 @@ botCDS_v2-ESUS
 │   │   │   └── procedimento_form.py
 │   │   └── tasks
 │   │       ├── __init__.py
+│   │       ├── acs_atd_hipertenso_task.py
 │   │       ├── atend_a97_task.py
 │   │       ├── atend_diabetico_task.py
 │   │       ├── atend_hipertenso_task.py
+│   │       ├── atend_saude_mamografia_task.py
 │   │       ├── atend_saude_repro_task.py
 │   │       ├── base_task.py
 │   │       ├── hipertenso_procedimento_task.py
@@ -41,18 +44,17 @@ botCDS_v2-ESUS
 │   │   ├── config_loader.py
 │   │   ├── date_sequencer.py
 │   │   └── file_manager.py
-│   ├── gui
-│   │   ├── __init__.py
-│   │   ├── dialogs.py
-│   │   ├── main_window.py
-│   │   └── worker.py
-│   └── gui.rar
-├── creature.bat
+│   └── gui
+│       ├── __init__.py
+│       ├── dialogs.py
+│       ├── main_window.py
+│       └── worker.py
 ├── docs
 │   └── wiki.md
 ├── error_screenshots
+├── estrutura_projeto - Copia.txt
 ├── estrutura_projeto.txt
-├── guiLayoutNew.py
+├── install_playwright and pyhton.ps1
 ├── main.py
 ├── requirements.txt
 ├── resources
@@ -61,4 +63,3 @@ botCDS_v2-ESUS
 │   └── img
 │       ├── Auto-py-to-exe.png
 │       ├── capa.png
-├── tree_project.py

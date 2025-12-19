@@ -1,4 +1,4 @@
-# Arquivo: app/automation/tasks/base_task.py (VERSÃO v1g - Integrando Gênero ACS)
+# Arquivo: app/automation/tasks/base_task.py (VERSÃO v3b - Validação Mamografia e Citopatológico Cervico Vaginal)
 from abc import ABC, abstractmethod # Usamos ABC para criar classes abstratas
 from playwright.async_api import Page, Locator
 import pandas as pd

@@ -2,7 +2,7 @@
 from playwright.async_api import Page, Locator
 from app.core.logger import logger
 from app.core.errors import ElementNotFoundError, ElementNotInteractableError, AutomationError
-from app.automation.error_handler import AutomationErrorHandler # Importamos o handler
+from app.automation.error_handler import AutomationErrorHandler, SkipRecordException, AbortAutomationException
 import asyncio # Importamos asyncio para await sleeps controlados
 from playwright._impl._errors import TimeoutError # Importa TimeoutError
 
@@ -126,6 +126,31 @@ class BasePage:
             # Uma alternativa seria o handle_error levantar SEMPRE AutomationError,
             # e o TaskRunner capturar apenas AutomationError, SkipRecordException, AbortAutomationException.
             # Vamos seguir com a segunda abordagem: handle_error levanta suas exceções de controle.
+    
+    async def _safe_wait_for_selector_for_2(self, locator_or_selector: Locator | str, state="visible", timeout=10000, step_description: str = None) -> Locator | str:
+        """
+        Espera por um elemento usando um Locator ou uma string de seletor.
+        Retorna o Locator encontrado ou a string da ação do usuário em caso de erro.
+        """
+        desc = step_description if step_description else f"Esperar por seletor: {locator_or_selector}"
+        logger.debug(f"Tentando esperar por: {desc}")
+        
+        # Determina se recebemos um Locator ou uma string de seletor
+        if isinstance(locator_or_selector, str):
+            locator = self._page.locator(locator_or_selector)
+        else:
+            locator = locator_or_selector # Já é um Locator
+        
+        try:
+            await locator.wait_for(state=state, timeout=timeout)
+            logger.debug(f"Seletor encontrado: {desc}")
+            return locator # Retorna o Locator em caso de sucesso
+        except (SkipRecordException, AbortAutomationException):
+            raise
+        except Exception as e:
+            user_action = await self._handler.handle_error(e, step_description=f"Esperar por: {desc}")
+            return user_action # Retorna a ação (o chamador saberá que o locator não foi obtido)
+    # --- FIM DA CORREÇÃO ---
         
     async def _safe_wait_for_locator(self, locator: Locator, state="visible", timeout=10000, step_description: str = None):
         """Espera por um Locator específico com tratamento de erro."""
@@ -138,6 +163,8 @@ class BasePage:
             user_action = await self._handler.handle_error(e, step_description=f"Esperar por: {desc}")
             if user_action == "continue":
                 raise AutomationError(f"Retentando registro devido à espera por '{desc}' após intervenção manual.") from e
+    
+    
 
     async def _safe_goto(self, url: str, step_description: str = "Navegar para URL"):
          """Navega para uma URL com tratamento de erro."""

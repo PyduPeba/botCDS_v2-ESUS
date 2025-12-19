@@ -48,8 +48,8 @@ class MainWindow(QWidget):
 
     def initUI(self):
         #Atualização de Texto de Título de Versões ambos.
-        versao = "5.3.3d"
-        pec_versao = "5.4.11"
+        versao = "6.1.D-19"
+        pec_versao = "5.4.22"
 
         """Configura a interface gráfica principal."""
         # Configurar a imagem de fundo (chame ANTES de configurar o layout principal se for manual)

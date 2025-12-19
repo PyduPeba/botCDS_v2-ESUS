@@ -384,12 +384,19 @@ class MainMenu(BasePage):
             ubs_name = ubs_name.strip()
             logger.info(f"Nome completo da UBS capturado: '{ubs_name}'")
 
-            # Capturar Código/Nome Curto da UBS (e.g., ACUDE DOS PINHEIROS)
+            # Capturar Código/Nome Curto da UBS (OPCIONAL)
             ubs_code_locator = self._page.locator(self._UBS_CODE_SELECTOR)
-            await self._safe_wait_for_locator(ubs_code_locator, timeout=10000, step_description="Código/Nome Curto da UBS")
-            ubs_code = await ubs_code_locator.inner_text()
-            ubs_code = ubs_code.strip()
-            logger.info(f"Código/Nome curto da UBS capturado: '{ubs_code}'")
+            try:
+                await ubs_code_locator.wait_for(state="visible", timeout=3000)
+                ubs_code = (await ubs_code_locator.inner_text()).strip()
+                logger.info(f"Código/Nome curto da UBS capturado: '{ubs_code}'")
+            except TimeoutError:
+                # Se não achou o "curto", usa o nome completo (se existir); senão, vazio
+                ubs_code = ubs_name if ubs_name not in (None, "", "Não encontrada") else ""
+                logger.warning(
+                    "Código/Nome Curto da UBS não encontrado. "
+                    f"Usando fallback para nome completo: '{ubs_code}'"
+                )
 
 
         except (AutomationError, SkipRecordException, AbortAutomationException):
